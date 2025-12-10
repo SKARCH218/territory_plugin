@@ -1,0 +1,26 @@
+name: territory_Plugin
+version: '1.0-SNAPSHOT'
+main: kr.skarch.territory_Plugin.Territory_Plugin
+api-version: '1.20'
+depend: [LuckPerms]
+softdepend: [BlueMap, Vault, PlaceholderAPI]
+
+commands:
+  territory:
+    description: Territory plugin main command
+    usage: /territory <stone|scroll|info|team|reload|endwar>
+    aliases: [terr, t]
+  war-confirm:
+    description: Confirm war declaration
+    usage: /war-confirm <yes|no>
+
+permissions:
+  territory.admin:
+    description: Admin permissions for territory plugin
+    default: op
+  territory.upgrade:
+    description: Allows upgrading occupation stones
+    default: true
+  territory.war.declare:
+    description: Allows declaring war
+    default: true
