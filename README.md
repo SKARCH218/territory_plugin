@@ -586,39 +586,973 @@ scoreboard:
 
 ---
 
+## 📜 Skript 연동
+
+Territory Plugin은 **Skript-Reflect**를 통해 완벽하게 연동 가능합니다!
+
+### 필수 요구사항
+
+```
+✅ Skript 2.6+
+✅ skript-reflect 2.0+
+✅ Territory Plugin
+```
+
+### 설치 방법
+
+```bash
+1. Skript 설치
+2. skript-reflect 설치
+3. Territory Plugin 설치
+4. 서버 재시작
+```
+
+---
+
+### 🎯 Skript API 사용 예제
+
+#### 1. 플레이어가 서 있는 위치의 영토 확인
+
+```skript
+command /check:
+    trigger:
+        set {_world} to world of player
+        set {_chunkX} to player's x-coordinate divided by 16
+        set {_chunkZ} to player's z-coordinate divided by 16
+        set {_chunkKey} to "%{_world}%;%floor({_chunkX})%;%floor({_chunkZ})%"
+        
+        # Territory Plugin API 호출
+        set {_plugin} to plugin "territory_Plugin"
+        set {_database} to {_plugin}.getDatabaseManager()
+        set {_owner} to {_database}.getChunkOwner({_chunkKey})
+        
+        if {_owner} is set:
+            send "§e이 땅은 §a%{_owner}% §e국가 소유입니다!" to player
+        else:
+            send "§e이 땅은 주인이 없습니다!" to player
+```
+
+#### 2. 특정 국가의 영지에 들어갔을 때 메시지
+
+```skript
+import:
+    kr.skarch.territory_Plugin.Territory_Plugin
+    org.bukkit.Bukkit
+
+every 2 seconds:
+    loop all players:
+        set {_world} to world of loop-player
+        set {_chunkX} to x-coordinate of loop-player divided by 16
+        set {_chunkZ} to z-coordinate of loop-player divided by 16
+        set {_chunkKey} to "%{_world}%;%floor({_chunkX})%;%floor({_chunkZ})%"
+        
+        # API 호출
+        set {_plugin} to Bukkit.getPluginManager().getPlugin("territory_Plugin")
+        set {_owner} to {_plugin}.getDatabaseManager().getChunkOwner({_chunkKey})
+        
+        # 이전 위치와 비교
+        if {_owner} is not {territory::%uuid of loop-player%}:
+            set {territory::%uuid of loop-player%} to {_owner}
+            
+            if {_owner} is set:
+                send title "§6영토 진입" with subtitle "§e%{_owner}% 국가" to loop-player for 2 seconds
+                play sound "block.note_block.pling" to loop-player
+            else:
+                send title "§7무주지" with subtitle "§f주인 없는 땅" to loop-player for 2 seconds
+```
+
+#### 3. 점령석 정보 확인
+
+```skript
+command /stoneinfo:
+    trigger:
+        set {_world} to world of player
+        set {_chunkX} to x-coordinate of player divided by 16
+        set {_chunkZ} to z-coordinate of player divided by 16
+        set {_centerX} to (floor({_chunkX}) * 16) + 7
+        set {_centerZ} to (floor({_chunkZ}) * 16) + 7
+        set {_y} to 70  # config의 spawn-y-coordinate
+        
+        # 점령석 위치 계산
+        set {_plugin} to plugin "territory_Plugin"
+        set {_db} to {_plugin}.getDatabaseManager()
+        
+        # Location 객체 생성
+        set {_loc} to location at {_centerX}, {_y}, {_centerZ} in {_world}
+        set {_stone} to {_db}.getStoneByLocation({_loc})
+        
+        if {_stone} is set:
+            set {_tier} to {_stone}.getCurrentTier()
+            set {_owner} to {_stone}.getOwnerGroup()
+            set {_time} to {_stone}.getOccupationTime()
+            
+            send "§6=== 점령석 정보 ===" to player
+            send "§e소유자: §f%{_owner}%" to player
+            send "§e티어: §f%{_tier}%" to player
+            send "§e점령 시간: §f%{_time}% 초" to player
+        else:
+            send "§c이 청크에는 점령석이 없습니다!" to player
+```
+
+#### 4. 전쟁 상태 확인
+
+```skript
+command /warcheck <text>:
+    trigger:
+        set {_nation} to arg-1
+        set {_plugin} to plugin "territory_Plugin"
+        set {_warManager} to {_plugin}.getWarManager()
+        set {_isWar} to {_warManager}.isInGlobalWar({_nation})
+        
+        if {_isWar} is true:
+            send "§c%{_nation}%은(는) 현재 전쟁 중입니다!" to player
+        else:
+            send "§a%{_nation}%은(는) 평화 상태입니다." to player
+```
+
+#### 5. 국가 통계 조회
+
+```skript
+command /nationstats <text>:
+    trigger:
+        set {_nation} to arg-1
+        set {_plugin} to plugin "territory_Plugin"
+        set {_statsManager} to {_plugin}.getStatsManager()
+        set {_stats} to {_statsManager}.getNationStats({_nation})
+        
+        if {_stats} is set:
+            set {_chunks} to {_stats}.getTotalChunks()
+            set {_stones} to {_stats}.getTotalStones()
+            set {_tier} to {_stats}.getHighestTier()
+            set {_score} to {_stats}.getTerritoryScore()
+            
+            send "§6=== %{_nation}% 통계 ===" to player
+            send "§e영토: §f%{_chunks}% 청크" to player
+            send "§e점령석: §f%{_stones}%개" to player
+            send "§e최고 티어: §f%{_tier}%" to player
+            send "§e영토 점수: §f%{_score}%" to player
+        else:
+            send "§c국가 정보를 찾을 수 없습니다!" to player
+```
+
+#### 6. 영토 이동 제한 (특정 국가만 입장)
+
+```skript
+on region enter:
+    set {_world} to world of player
+    set {_chunkX} to x-coordinate of player divided by 16
+    set {_chunkZ} to z-coordinate of player divided by 16
+    set {_chunkKey} to "%{_world}%;%floor({_chunkX})%;%floor({_chunkZ})%"
+    
+    set {_plugin} to plugin "territory_Plugin"
+    set {_owner} to {_plugin}.getDatabaseManager().getChunkOwner({_chunkKey})
+    
+    # VIP 영역 체크 (예: "vip_nation")
+    if {_owner} is "vip_nation":
+        if player doesn't have permission "territory.vip":
+            send "§c이 영역은 VIP 전용입니다!" to player
+            push player backwards at speed 2
+            cancel event
+```
+
+#### 7. 점령석 설치 이벤트 감지
+
+```skript
+# 플레이어가 Beacon을 설치할 때
+on place of beacon:
+    set {_item} to player's tool
+    if name of {_item} contains "Occupation Stone":
+        wait 1 tick
+        
+        # 점령석이 생성되었는지 확인
+        set {_world} to world of player
+        set {_loc} to location of event-block
+        
+        send "§a점령석이 설치되었습니다!" to all players
+        send "§e위치: %{_world}% (%x of {_loc}%, %y of {_loc}%, %z of {_loc}%)" to all players
+```
+
+#### 8. 자동 영토 세금 시스템
+
+```skript
+every 1 hour:
+    loop all players:
+        # 플레이어의 국가 확인
+        set {_plugin} to plugin "territory_Plugin"
+        set {_playerGroup} to loop-player's primary group
+        
+        # 국가의 총 영토 확인
+        set {_stats} to {_plugin}.getStatsManager().getNationStats({_playerGroup})
+        
+        if {_stats} is set:
+            set {_chunks} to {_stats}.getTotalChunks()
+            set {_tax} to {_chunks} * 10  # 청크당 10원
+            
+            # 경제 플러그인 연동 (Vault)
+            if balance of loop-player >= {_tax}:
+                remove {_tax} from balance of loop-player
+                send "§e영토 세금 §c-%{_tax}%원 §7(청크: %{_chunks}%)" to loop-player
+            else:
+                send "§c영토 세금을 낼 수 없습니다! 파산 주의!" to loop-player
+```
+
+#### 9. 영토 랭킹 표시
+
+```skript
+command /ranking:
+    trigger:
+        set {_plugin} to plugin "territory_Plugin"
+        set {_statsManager} to {_plugin}.getStatsManager()
+        set {_allStats} to {_statsManager}.getAllNationStats()
+        
+        send "§6=== 국가 랭킹 ===" to player
+        
+        set {_rank} to 1
+        loop {_allStats}:
+            set {_nation} to loop-value.getNationName()
+            set {_score} to loop-value.getTerritoryScore()
+            set {_chunks} to loop-value.getTotalChunks()
+            
+            if {_rank} is 1:
+                send "§6🥇 %{_nation}% - %{_score}% (%{_chunks}% 청크)" to player
+            else if {_rank} is 2:
+                send "§7🥈 %{_nation}% - %{_score}% (%{_chunks}% 청크)" to player
+            else if {_rank} is 3:
+                send "§c🥉 %{_nation}% - %{_score}% (%{_chunks}% 청크)" to player
+            else:
+                send "§e%{_rank}%. %{_nation}% - %{_score}% (%{_chunks}% 청크)" to player
+            
+            add 1 to {_rank}
+            if {_rank} > 10:
+                stop loop
+```
+
+#### 10. 점령석 파괴 알림 (Discord 연동)
+
+```skript
+# 점령석(흑요석)이 파괴될 때
+on break of obsidian:
+    set {_loc} to location of event-block
+    set {_plugin} to plugin "territory_Plugin"
+    set {_db} to {_plugin}.getDatabaseManager()
+    
+    # 근처 점령석 확인 (2x2x2 구조)
+    loop blocks in radius 2 of {_loc}:
+        set {_stone} to {_db}.getStoneByLocation(location of loop-block)
+        if {_stone} is set:
+            set {_owner} to {_stone}.getOwnerGroup()
+            set {_breaker} to player's primary group
+            
+            # Discord 웹훅 (예시)
+            send "⚠️ **점령석 파괴!**" to discord webhook "YOUR_WEBHOOK_URL"
+            send "피해국: %{_owner}%" to discord webhook "YOUR_WEBHOOK_URL"
+            send "공격자: %{_breaker}%" to discord webhook "YOUR_WEBHOOK_URL"
+            send "위치: %world of {_loc}% (%x of {_loc}%, %y of {_loc}%, %z of {_loc}%)" to discord webhook "YOUR_WEBHOOK_URL"
+            
+            stop loop
+```
+
+---
+
+### 📚 Territory Plugin API 레퍼런스
+
+#### DatabaseManager
+
+```skript
+# 청크 소유자 확인
+{_owner} = {_database}.getChunkOwner({_chunkKey})
+# 반환: String (국가명) 또는 null
+
+# 점령석 정보 가져오기
+{_stone} = {_database}.getStoneByLocation({_location})
+# 반환: OccupationStone 또는 null
+
+# 점령석 UUID로 가져오기
+{_stone} = {_database}.getStoneByUuid({_uuid})
+
+# 특정 팀의 점령석 목록
+{_stones} = {_database}.getStonesByTeam({_teamName})
+# 반환: List<OccupationStone>
+
+# 전체 영토 맵
+{_territories} = {_database}.getAllTerritories()
+# 반환: Map<String, String> (chunkKey -> owner)
+
+# 청크 개수 확인
+{_count} = {_database}.getChunkCountByTeam({_teamName})
+# 반환: Int
+```
+
+#### TerritoryManager
+
+```skript
+# 점령석 설치
+{_stone} = {_territoryManager}.placeStone({_location}, {_ownerGroup})
+# 반환: OccupationStone 또는 null
+
+# 점령석 업그레이드
+{_success} = {_territoryManager}.upgradeStone({_stone})
+# 반환: Boolean
+
+# 점령석 파괴
+{_territoryManager}.destroyStone({_stone}, {_newOwnerGroup})
+```
+
+#### WarManager
+
+```skript
+# 전쟁 상태 확인
+{_isWar} = {_warManager}.isInGlobalWar({_nationName})
+# 반환: Boolean
+
+# 전쟁 선포
+{_warManager}.declareGlobalWar({_nationName})
+
+# 전쟁 종료
+{_warManager}.endGlobalWar({_nationName})
+
+# 교전 가능 여부
+{_canFight} = {_warManager}.canEngage({_attacker}, {_defender})
+# 반환: Boolean
+
+# 남은 준비 시간
+{_timeLeft} = {_warManager}.getTimeUntilWar({_nationName})
+# 반환: Long (초)
+```
+
+#### StatsManager
+
+```skript
+# 국가 통계
+{_stats} = {_statsManager}.getNationStats({_nationName})
+# 반환: NationStats 또는 null
+
+# 전체 국가 통계 (랭킹순)
+{_allStats} = {_statsManager}.getAllNationStats()
+# 반환: List<NationStats>
+
+# 국가 순위
+{_rank} = {_statsManager}.getNationRanking({_nationName})
+# 반환: Int
+
+# 가장 가까운 적 점령석
+{_location} = {_statsManager}.findNearestEnemyStone({_playerLocation}, {_playerTeam})
+# 반환: Location 또는 null
+
+# 점령석 위치 목록
+{_locations} = {_statsManager}.getStoneLocations({_nationName})
+# 반환: List<String>
+```
+
+#### OccupationStone (객체)
+
+```skript
+# 티어 가져오기
+{_tier} = {_stone}.getCurrentTier()
+# 반환: StoneTier (TIER_1, TIER_2, ...)
+
+# 소유자 가져오기
+{_owner} = {_stone}.getOwnerGroup()
+# 반환: String
+
+# 위치 가져오기
+{_location} = {_stone}.getLocation()
+# 반환: Location
+
+# UUID 가져오기
+{_uuid} = {_stone}.getStoneUuid()
+# 반환: UUID
+
+# 점령 시간 가져오기 (초)
+{_time} = {_stone}.getOccupationTime()
+# 반환: Long
+
+# 생성 시간 가져오기
+{_created} = {_stone}.getCreatedAt()
+# 반환: Long (timestamp)
+```
+
+#### NationStats (객체)
+
+```skript
+# 국가명
+{_name} = {_stats}.getNationName()
+
+# 표시명
+{_display} = {_stats}.getDisplayName()
+
+# 총 청크 수
+{_chunks} = {_stats}.getTotalChunks()
+
+# 점령석 수
+{_stones} = {_stats}.getTotalStones()
+
+# 최고 티어
+{_tier} = {_stats}.getHighestTier()
+
+# 전쟁 여부
+{_war} = {_stats}.isAtWar()
+
+# 온라인 멤버 수
+{_members} = {_stats}.getMemberCount()
+
+# 영토 점수
+{_score} = {_stats}.getTerritoryScore()
+```
+
+---
+
+### 🎮 실전 예제: 완전한 영토 시스템
+
+#### 영토 입장 시스템 (타이틀 + 사운드 + 파티클)
+
+```skript
+import:
+    kr.skarch.territory_Plugin.Territory_Plugin
+    org.bukkit.Bukkit
+    org.bukkit.Particle
+
+every 1 second:
+    loop all players:
+        set {_world} to world of loop-player
+        set {_chunkX} to x-coordinate of loop-player divided by 16
+        set {_chunkZ} to z-coordinate of loop-player divided by 16
+        set {_chunkKey} to "%{_world}%;%floor({_chunkX})%;%floor({_chunkZ})%"
+        
+        set {_plugin} to Bukkit.getPluginManager().getPlugin("territory_Plugin")
+        set {_owner} to {_plugin}.getDatabaseManager().getChunkOwner({_chunkKey})
+        
+        # 영토 변경 감지
+        if {_owner} is not {territory::%uuid of loop-player%}:
+            set {territory::%uuid of loop-player%} to {_owner}
+            
+            if {_owner} is set:
+                # 통계 가져오기
+                set {_stats} to {_plugin}.getStatsManager().getNationStats({_owner})
+                set {_display} to {_stats}.getDisplayName()
+                set {_chunks} to {_stats}.getTotalChunks()
+                
+                # 같은 팀인지 확인
+                set {_playerGroup} to loop-player's primary group
+                
+                if {_playerGroup} is {_owner}:
+                    # 본인 영토
+                    send title "§a%{_display}%" with subtitle "§7우리 국가 영토" to loop-player for 3 seconds
+                    play sound "block.note_block.chime" to loop-player
+                    spawn 10 of particle "villager_happy" at loop-player
+                else:
+                    # 적 영토
+                    set {_isWar} to {_plugin}.getWarManager().isInGlobalWar({_owner})
+                    
+                    if {_isWar} is true:
+                        send title "§c%{_display}%" with subtitle "§4⚔ 전쟁 중인 영토! §4⚔" to loop-player for 3 seconds
+                        play sound "entity.ender_dragon.growl" to loop-player
+                        spawn 20 of particle "lava" at loop-player
+                    else:
+                        send title "§6%{_display}%" with subtitle "§e영토 (%{_chunks}% 청크)" to loop-player for 3 seconds
+                        play sound "block.note_block.pling" to loop-player
+                        spawn 10 of particle "end_rod" at loop-player
+            else:
+                # 무주지
+                send title "§7무주지" with subtitle "§f주인 없는 땅 - 점령 가능!" to loop-player for 2 seconds
+                play sound "block.note_block.bass" to loop-player
+```
+
+#### 영토 보호 시스템
+
+```skript
+on break:
+    set {_world} to world of player
+    set {_chunkX} to x-coordinate of event-block divided by 16
+    set {_chunkZ} to z-coordinate of event-block divided by 16
+    set {_chunkKey} to "%{_world}%;%floor({_chunkX})%;%floor({_chunkZ})%"
+    
+    set {_plugin} to plugin "territory_Plugin"
+    set {_owner} to {_plugin}.getDatabaseManager().getChunkOwner({_chunkKey})
+    
+    if {_owner} is set:
+        set {_playerGroup} to player's primary group
+        
+        if {_playerGroup} is not {_owner}:
+            # 남의 땅
+            set {_isWar} to {_plugin}.getWarManager().isInGlobalWar({_owner})
+            
+            if {_isWar} is false:
+                cancel event
+                send "§c이 영토는 %{_owner}% 국가 소유입니다!" to player
+                send "§e전쟁을 선포해야 파괴할 수 있습니다." to player
+```
+
+---
+
+### 💡 활용 팁
+
+1. **성능 최적화**
+   - API 호출을 반복문 밖으로 이동
+   - 캐싱 변수 사용 (`{territory::%uuid%}`)
+
+2. **에러 처리**
+   ```skript
+   if {_plugin} is not set:
+       send "Territory Plugin이 로드되지 않았습니다!"
+       stop
+   ```
+
+3. **비동기 처리**
+   - 무거운 작업은 `wait 1 tick` 사용
+   - DB 조회는 최소화
+
+4. **Discord/웹훅 연동**
+   - skript-webhook 애드온 사용
+   - 중요 이벤트만 알림
+
+---
+
 ## 🔧 개발자 정보
 
-### API 사용
+### Kotlin/Java API 사용
+
+#### 1. 기본 API 접근
 
 ```kotlin
-// Territory Plugin API 접근
+// Territory Plugin 인스턴스 가져오기
 val territoryPlugin = Bukkit.getPluginManager().getPlugin("territory_Plugin") as Territory_Plugin
 
-// 영토 확인
-val chunkOwner = territoryPlugin.databaseManager.getChunkOwner(chunkKey)
-
-// 전쟁 상태 확인
-val isAtWar = territoryPlugin.warManager.isInGlobalWar(nationName)
-
-// 통계 조회
-val stats = territoryPlugin.statsManager.getNationStats(nationName)
+// 또는 의존성 주입
+class MyPlugin : JavaPlugin() {
+    private lateinit var territoryAPI: Territory_Plugin
+    
+    override fun onEnable() {
+        territoryAPI = server.pluginManager.getPlugin("territory_Plugin") as Territory_Plugin
+    }
+}
 ```
 
-### 이벤트 리스너
+#### 2. 영토 확인 API
 
 ```kotlin
-// 점령석 설치 이벤트
-@EventHandler
-fun onStonePlace(event: BlockPlaceEvent) {
-    // 커스텀 로직
+// 청크 소유자 확인
+val chunkKey = "${world.name};${chunk.x};${chunk.z}"
+val owner = territoryPlugin.databaseManager.getChunkOwner(chunkKey)
+
+if (owner != null) {
+    player.sendMessage("이 땅은 $owner 국가 소유입니다!")
+} else {
+    player.sendMessage("주인 없는 땅입니다!")
 }
 
-// 전쟁 선포 이벤트
-@EventHandler
-fun onWarDeclare(event: WarDeclareEvent) {
-    // 커스텀 로직
+// 플레이어가 서 있는 위치의 영토
+fun getPlayerTerritory(player: Player): String? {
+    val chunk = player.location.chunk
+    val chunkKey = "${player.world.name};${chunk.x};${chunk.z}"
+    return territoryPlugin.databaseManager.getChunkOwner(chunkKey)
+}
+
+// 특정 위치가 특정 국가의 땅인지 확인
+fun isNationTerritory(location: Location, nationName: String): Boolean {
+    val chunk = location.chunk
+    val chunkKey = "${location.world.name};${chunk.x};${chunk.z}"
+    val owner = territoryPlugin.databaseManager.getChunkOwner(chunkKey)
+    return owner == nationName
 }
 ```
+
+#### 3. 점령석 관리 API
+
+```kotlin
+// 점령석 설치
+val stone = territoryPlugin.territoryManager.placeStone(location, ownerGroup)
+if (stone != null) {
+    player.sendMessage("점령석 설치 성공!")
+} else {
+    player.sendMessage("점령석 설치 실패!")
+}
+
+// 점령석 정보 조회
+val stone = territoryPlugin.databaseManager.getStoneByLocation(location)
+if (stone != null) {
+    println("소유자: ${stone.ownerGroup}")
+    println("티어: ${stone.currentTier}")
+    println("점령 시간: ${stone.getOccupationTime()}초")
+}
+
+// 특정 국가의 모든 점령석
+val stones = territoryPlugin.databaseManager.getStonesByTeam(nationName)
+stones.forEach { stone ->
+    println("점령석: ${stone.location}, 티어: ${stone.currentTier}")
+}
+
+// 점령석 업그레이드
+val success = territoryPlugin.territoryManager.upgradeStone(stone)
+if (success) {
+    player.sendMessage("업그레이드 성공!")
+}
+
+// 점령석 파괴 및 영토 이전
+territoryPlugin.territoryManager.destroyStone(stone, newOwnerGroup)
+```
+
+#### 4. 전쟁 시스템 API
+
+```kotlin
+// 전쟁 상태 확인
+val isAtWar = territoryPlugin.warManager.isInGlobalWar(nationName)
+if (isAtWar) {
+    player.sendMessage("$nationName 은(는) 현재 전쟁 중입니다!")
+}
+
+// 전쟁 선포
+territoryPlugin.warManager.declareGlobalWar(nationName)
+
+// 전쟁 종료
+territoryPlugin.warManager.endGlobalWar(nationName)
+
+// 교전 가능 여부 확인
+val canFight = territoryPlugin.warManager.canEngage(attackerNation, defenderNation)
+if (!canFight) {
+    event.isCancelled = true
+    player.sendMessage("전쟁 중이 아니면 공격할 수 없습니다!")
+}
+
+// 전쟁 준비 시간 확인
+val timeLeft = territoryPlugin.warManager.getTimeUntilWar(nationName)
+if (timeLeft > 0) {
+    player.sendMessage("전쟁까지 ${timeLeft}초 남았습니다!")
+}
+```
+
+#### 5. 통계 시스템 API
+
+```kotlin
+// 국가 통계 조회
+val stats = territoryPlugin.statsManager.getNationStats(nationName)
+if (stats != null) {
+    player.sendMessage("=== $nationName 통계 ===")
+    player.sendMessage("영토: ${stats.totalChunks} 청크")
+    player.sendMessage("점령석: ${stats.totalStones}개")
+    player.sendMessage("최고 티어: ${stats.highestTier}")
+    player.sendMessage("영토 점수: ${stats.getTerritoryScore()}")
+}
+
+// 국가 랭킹
+val ranking = territoryPlugin.statsManager.getNationRanking(nationName)
+player.sendMessage("$nationName 순위: $ranking")
+
+// 전체 국가 통계 (랭킹순)
+val allStats = territoryPlugin.statsManager.getAllNationStats()
+allStats.forEachIndexed { index, stats ->
+    println("${index + 1}. ${stats.displayName} - ${stats.getTerritoryScore()}")
+}
+
+// 가장 가까운 적 점령석 찾기
+val nearestStone = territoryPlugin.statsManager.findNearestEnemyStone(
+    player.location, 
+    playerNation
+)
+if (nearestStone != null) {
+    player.compassTarget = nearestStone
+    player.sendMessage("나침반이 가장 가까운 적 점령석을 가리킵니다!")
+}
+```
+
+#### 6. 플레이어 국가 확인
+
+```kotlin
+import kr.skarch.territory_Plugin.utils.PlayerGroupCache
+
+// 플레이어의 국가 확인 (캐싱됨 - 5분)
+val playerNation = PlayerGroupCache.getPlayerGroup(player)
+player.sendMessage("당신의 국가: $playerNation")
+
+// 캐시 무효화 (그룹 변경 시)
+PlayerGroupCache.invalidate(player.uniqueId)
+```
+
+#### 7. 커스텀 이벤트 리스너
+
+```kotlin
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.player.PlayerMoveEvent
+
+class TerritoryListener(private val territoryAPI: Territory_Plugin) : Listener {
+    
+    // 점령석 파괴 감지
+    @EventHandler
+    fun onStoneBreak(event: BlockBreakEvent) {
+        val block = event.block
+        if (block.type == Material.OBSIDIAN) {
+            val stone = territoryAPI.databaseManager.getStoneByLocation(block.location)
+            if (stone != null) {
+                // 점령석입니다!
+                val player = event.player
+                val playerNation = PlayerGroupCache.getPlayerGroup(player)
+                
+                if (playerNation != stone.ownerGroup) {
+                    // 적이 점령석을 파괴하려 함
+                    Bukkit.broadcast("§c경고! ${stone.ownerGroup}의 점령석이 공격받고 있습니다!")
+                }
+            }
+        }
+    }
+    
+    // 영토 진입 감지
+    private val lastTerritory = mutableMapOf<UUID, String?>()
+    
+    @EventHandler
+    fun onPlayerMove(event: PlayerMoveEvent) {
+        val from = event.from
+        val to = event.to ?: return
+        
+        // 청크 변경 확인
+        if (from.chunk != to.chunk) {
+            val player = event.player
+            val chunkKey = "${to.world.name};${to.chunk.x};${to.chunk.z}"
+            val owner = territoryAPI.databaseManager.getChunkOwner(chunkKey)
+            
+            // 이전 영토와 다른지 확인
+            if (owner != lastTerritory[player.uniqueId]) {
+                lastTerritory[player.uniqueId] = owner
+                
+                if (owner != null) {
+                    player.sendTitle("§6$owner", "§e국가 영토", 10, 40, 10)
+                } else {
+                    player.sendTitle("§7무주지", "§f주인 없는 땅", 10, 40, 10)
+                }
+            }
+        }
+    }
+}
+```
+
+#### 8. 영토 보호 플러그인 통합
+
+```kotlin
+class TerritoryProtectionPlugin : JavaPlugin() {
+    private lateinit var territoryAPI: Territory_Plugin
+    
+    override fun onEnable() {
+        territoryAPI = server.pluginManager.getPlugin("territory_Plugin") as Territory_Plugin
+        server.pluginManager.registerEvents(ProtectionListener(), this)
+    }
+    
+    inner class ProtectionListener : Listener {
+        
+        @EventHandler(priority = EventPriority.HIGH)
+        fun onBlockBreak(event: BlockBreakEvent) {
+            if (event.isCancelled) return
+            
+            val player = event.player
+            val location = event.block.location
+            
+            if (!canPlayerBuild(player, location)) {
+                event.isCancelled = true
+                player.sendMessage("§c이 영토에서는 블록을 부술 수 없습니다!")
+            }
+        }
+        
+        @EventHandler(priority = EventPriority.HIGH)
+        fun onBlockPlace(event: BlockPlaceEvent) {
+            if (event.isCancelled) return
+            
+            val player = event.player
+            val location = event.block.location
+            
+            if (!canPlayerBuild(player, location)) {
+                event.isCancelled = true
+                player.sendMessage("§c이 영토에서는 블록을 설치할 수 없습니다!")
+            }
+        }
+        
+        private fun canPlayerBuild(player: Player, location: Location): Boolean {
+            // 관리자는 항상 가능
+            if (player.hasPermission("territory.admin")) return true
+            
+            val chunk = location.chunk
+            val chunkKey = "${location.world.name};${chunk.x};${chunk.z}"
+            val owner = territoryAPI.databaseManager.getChunkOwner(chunkKey)
+            
+            // 주인 없는 땅은 가능
+            if (owner == null) return true
+            
+            val playerNation = PlayerGroupCache.getPlayerGroup(player)
+            
+            // 본인 땅이면 가능
+            if (owner == playerNation) return true
+            
+            // 전쟁 중이면 가능
+            if (territoryAPI.warManager.isInGlobalWar(owner) || 
+                territoryAPI.warManager.isInGlobalWar(playerNation)) {
+                return true
+            }
+            
+            // 그 외는 불가
+            return false
+        }
+    }
+}
+```
+
+#### 9. 경제 연동 예제
+
+```kotlin
+import net.milkbowl.vault.economy.Economy
+
+class TerritoryEconomyIntegration(
+    private val territoryAPI: Territory_Plugin,
+    private val economy: Economy
+) {
+    
+    // 영토 세금 징수
+    fun collectTerritoryTax(nationName: String): Double {
+        val stats = territoryAPI.statsManager.getNationStats(nationName) ?: return 0.0
+        val chunks = stats.totalChunks
+        val taxPerChunk = 10.0
+        val totalTax = chunks * taxPerChunk
+        
+        // 온라인 플레이어들에게서 세금 징수
+        Bukkit.getOnlinePlayers()
+            .filter { PlayerGroupCache.getPlayerGroup(it) == nationName }
+            .forEach { player ->
+                if (economy.has(player, totalTax)) {
+                    economy.withdrawPlayer(player, totalTax)
+                    player.sendMessage("§e영토 세금 -$${totalTax} §7(청크: $chunks)")
+                } else {
+                    player.sendMessage("§c세금을 낼 돈이 부족합니다!")
+                }
+            }
+        
+        return totalTax
+    }
+    
+    // 점령석 업그레이드 비용 확인
+    fun canAffordUpgrade(player: Player, stone: OccupationStone): Boolean {
+        val currentTier = stone.currentTier.ordinal + 1
+        val nextTier = currentTier + 1
+        val cost = territoryAPI.configManager.getUpgradeMoney(currentTier, nextTier)
+        
+        return economy.has(player, cost)
+    }
+}
+```
+
+#### 10. Discord 연동 예제
+
+```kotlin
+import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.EmbedBuilder
+import java.awt.Color
+
+class TerritoryDiscordIntegration(
+    private val territoryAPI: Territory_Plugin,
+    private val jda: JDA,
+    private val channelId: String
+) {
+    
+    // 전쟁 선포 알림
+    fun notifyWarDeclaration(nationName: String) {
+        val channel = jda.getTextChannelById(channelId) ?: return
+        
+        val embed = EmbedBuilder()
+            .setTitle("⚔️ 전쟁 선포!")
+            .setDescription("**$nationName**이(가) 전면전을 선포했습니다!")
+            .setColor(Color.RED)
+            .addField("전쟁 시작", "10분 후", false)
+            .addField("상태", "준비 중...", false)
+            .setTimestamp(java.time.Instant.now())
+            .build()
+        
+        channel.sendMessageEmbeds(embed).queue()
+    }
+    
+    // 점령석 파괴 알림
+    fun notifyStoneDestruction(stone: OccupationStone, destroyer: String) {
+        val channel = jda.getTextChannelById(channelId) ?: return
+        
+        val location = stone.location
+        val embed = EmbedBuilder()
+            .setTitle("💥 점령석 파괴!")
+            .setColor(Color.ORANGE)
+            .addField("피해국", stone.ownerGroup, true)
+            .addField("공격자", destroyer, true)
+            .addField("위치", "${location.world.name} (${location.blockX}, ${location.blockZ})", false)
+            .addField("티어", stone.currentTier.tierName, true)
+            .setTimestamp(java.time.Instant.now())
+            .build()
+        
+        channel.sendMessageEmbeds(embed).queue()
+    }
+    
+    // 국가 랭킹 전송
+    fun sendRanking() {
+        val channel = jda.getTextChannelById(channelId) ?: return
+        val allStats = territoryAPI.statsManager.getAllNationStats()
+        
+        val embed = EmbedBuilder()
+            .setTitle("🏆 국가 랭킹")
+            .setColor(Color.GOLD)
+        
+        allStats.take(10).forEachIndexed { index, stats ->
+            val medal = when(index) {
+                0 -> "🥇"
+                1 -> "🥈"
+                2 -> "🥉"
+                else -> "${index + 1}."
+            }
+            
+            embed.addField(
+                "$medal ${stats.displayName}",
+                "점수: ${stats.getTerritoryScore()} | 청크: ${stats.totalChunks} | 점령석: ${stats.totalStones}",
+                false
+            )
+        }
+        
+        embed.setTimestamp(java.time.Instant.now())
+        channel.sendMessageEmbeds(embed.build()).queue()
+    }
+}
+```
+
+---
+
+### 📦 Maven/Gradle 의존성
+
+#### Gradle (Kotlin DSL)
+
+```kotlin
+repositories {
+    maven("https://jitpack.io")
+}
+
+dependencies {
+    compileOnly(fileTree("libs") { include("territory_Plugin.jar") })
+}
+```
+
+#### Maven
+
+```xml
+<dependency>
+    <groupId>kr.skarch</groupId>
+    <artifactId>territory_Plugin</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+---
+
+### 🎯 API 사용 체크리스트
+
+- [ ] plugin.yml에 `depend: [territory_Plugin]` 추가
+- [ ] Territory_Plugin 인스턴스 가져오기
+- [ ] null 체크 (플러그인 비활성화 대비)
+- [ ] 비동기 처리 (DB 조회가 많은 경우)
+- [ ] 캐싱 활용 (PlayerGroupCache 등)
+- [ ] 에러 처리 (try-catch)
+
+---
 
 ---
 
