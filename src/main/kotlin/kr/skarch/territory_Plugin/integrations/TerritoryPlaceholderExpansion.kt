@@ -2,7 +2,6 @@ package kr.skarch.territory_Plugin.integrations
 
 import kr.skarch.territory_Plugin.Territory_Plugin
 import me.clip.placeholderapi.expansion.PlaceholderExpansion
-import net.luckperms.api.LuckPermsProvider
 import org.bukkit.entity.Player
 
 class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : PlaceholderExpansion() {
@@ -112,13 +111,7 @@ class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : Plac
     }
 
     private fun getPlayerTeam(player: Player): String {
-        return try {
-            val luckPerms = LuckPermsProvider.get()
-            val user = luckPerms.userManager.getUser(player.uniqueId)
-            user?.primaryGroup ?: "default"
-        } catch (e: Exception) {
-            "default"
-        }
+        return kr.skarch.territory_Plugin.utils.PlayerGroupCache.getPlayerGroup(player)
     }
 
     private fun formatTime(seconds: Int): String {

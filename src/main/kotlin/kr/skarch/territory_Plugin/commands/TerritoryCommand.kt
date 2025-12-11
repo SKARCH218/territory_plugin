@@ -261,9 +261,9 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         }
     }
 
-    private fun reloadConfig(player: Player) {
-        if (!player.hasPermission("territory.admin")) {
-            player.sendMessage(plugin.langManager.getNoPermission())
+    private fun reloadConfig(sender: CommandSender) {
+        if (!sender.hasPermission("territory.admin")) {
+            sender.sendMessage(plugin.langManager.getNoPermission())
             return
         }
 
@@ -271,15 +271,15 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         plugin.langManager.reload()
         plugin.itemManager.reload()
 
-        player.sendMessage(plugin.langManager.getMessage("reload_success"))
-        player.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "config.yml"))
-        player.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "team.yml"))
-        player.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "lang.yml"))
-        player.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "items.yml"))
+        sender.sendMessage(plugin.langManager.getMessage("reload_success"))
+        sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "config.yml"))
+        sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "team.yml"))
+        sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "lang.yml"))
+        sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "items.yml"))
 
         // BlueMap 마커 업데이트
         if (plugin.blueMapManager.isBlueMapEnabled()) {
-            player.sendMessage("§eBlueMap 마커를 업데이트하는 중...")
+            sender.sendMessage("§eBlueMap 마커를 업데이트하는 중...")
             plugin.blueMapManager.updateMarkers()
         }
     }

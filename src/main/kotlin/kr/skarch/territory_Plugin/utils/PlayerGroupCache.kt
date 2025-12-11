@@ -40,7 +40,7 @@ object PlayerGroupCache {
             val user = luckPerms.userManager.getUser(uuid)
 
             if (user == null) {
-                "default"
+                "팀없음"
             } else {
                 // Get Territory Plugin instance
                 val plugin = Bukkit.getPluginManager().getPlugin("territory_Plugin") as? Territory_Plugin
@@ -60,15 +60,15 @@ object PlayerGroupCache {
                     // Find intersection: player's groups that are registered as nations
                     val validNationGroups = playerGroups.intersect(registeredNations)
 
-                    // Return first valid nation group, or primary group, or default
-                    validNationGroups.firstOrNull() ?: user.primaryGroup
+                    // Return first valid nation group, or "팀없음" if no valid nation found
+                    validNationGroups.firstOrNull() ?: "팀없음"
                 } else {
-                    // Plugin not loaded yet, use primary group
-                    user.primaryGroup
+                    // Plugin not loaded yet, check if primary group is valid
+                    "팀없음"
                 }
             }
         } catch (e: Exception) {
-            "default"
+            "팀없음"
         }
 
         // Update cache

@@ -71,6 +71,7 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
      * Check if a block type is safe to replace
      */
     private fun isBlockReplaceable(type: Material): Boolean {
+        // 설치 가능한 블록 타입들 - 자연 블록과 식물들을 모두 교체 가능하도록 설정
         return when (type) {
             Material.AIR,
             Material.CAVE_AIR,
@@ -82,7 +83,54 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
             Material.DEAD_BUSH,
             Material.SNOW,
             Material.WATER,
-            Material.LAVA -> true
+            Material.LAVA,
+            Material.GRASS_BLOCK,
+            Material.DIRT,
+            Material.COARSE_DIRT,
+            Material.PODZOL,
+            Material.SAND,
+            Material.RED_SAND,
+            Material.GRAVEL,
+            Material.CLAY,
+            Material.STONE,
+            Material.GRANITE,
+            Material.DIORITE,
+            Material.ANDESITE,
+            Material.DEEPSLATE,
+            Material.TUFF,
+            Material.NETHERRACK,
+            Material.SOUL_SAND,
+            Material.SOUL_SOIL,
+            Material.WARPED_NYLIUM,
+            Material.CRIMSON_NYLIUM,
+            Material.END_STONE,
+            Material.SEAGRASS,
+            Material.TALL_SEAGRASS,
+            Material.KELP,
+            Material.KELP_PLANT,
+            Material.DANDELION,
+            Material.POPPY,
+            Material.BLUE_ORCHID,
+            Material.ALLIUM,
+            Material.AZURE_BLUET,
+            Material.RED_TULIP,
+            Material.ORANGE_TULIP,
+            Material.WHITE_TULIP,
+            Material.PINK_TULIP,
+            Material.OXEYE_DAISY,
+            Material.CORNFLOWER,
+            Material.LILY_OF_THE_VALLEY,
+            Material.SUNFLOWER,
+            Material.LILAC,
+            Material.ROSE_BUSH,
+            Material.PEONY,
+            Material.BROWN_MUSHROOM,
+            Material.RED_MUSHROOM,
+            Material.SUGAR_CANE,
+            Material.VINE,
+            Material.GLOW_LICHEN,
+            Material.COBBLESTONE,
+            Material.MOSSY_COBBLESTONE -> true
             else -> false
         }
     }

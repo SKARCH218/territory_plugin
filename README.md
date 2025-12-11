@@ -3,8 +3,15 @@
 [![Version](https://img.shields.io/badge/version-1.0--SNAPSHOT-blue.svg)](https://github.com)
 [![Minecraft](https://img.shields.io/badge/minecraft-1.20.4+-green.svg)](https://www.minecraft.net)
 [![API](https://img.shields.io/badge/Paper-API-orange.svg)](https://papermc.io)
+[![Updated](https://img.shields.io/badge/updated-2025--12--11-brightgreen.svg)](https://github.com)
 
 **Territory Plugin**은 Minecraft Paper 서버를 위한 강력한 영토 점령 및 전쟁 시스템입니다.
+
+> **🆕 최신 업데이트 (2025-12-11)**
+> - ✅ 점령석 설치 문제 해결 (60+ 블록 타입 지원)
+> - ✅ 콘솔 명령어 지원 (reload, startwar, endwar)
+> - ✅ 팀 인식 개선 ("팀없음" 자동 처리)
+> - ✅ PlaceholderAPI 성능 최적화
 
 ---
 
@@ -44,6 +51,19 @@ Territory Plugin은 다음을 제공합니다:
 - **재질**: 흑요석 (config에서 변경 가능)
 - **위치**: 청크 중앙 (x: 7-8, z: 7-8)
 - **높이**: config에서 설정 가능
+
+#### 설치 가능한 블록 (60+ 종류)
+```
+✅ 자연 지형: 흙, 풀블록, 돌, 자갈, 모래, 점토
+✅ 식물: 잔디, 큰 잔디, 양치류, 모든 꽃, 버섯
+✅ 액체: 물, 용암
+✅ 광물: 화강암, 섬록암, 안산암, 딥슬레이트, 응회암
+✅ 네더: 네더랙, 영혼 모래, 진홍색/뒤틀린 나일륨
+✅ 엔드: 엔드 돌
+✅ 기타: 공기, 눈, 덩굴, 빛 이끼
+
+❌ 설치 불가: 건물 블록, 나무, 광석, 기계, 체스트 등
+```
 
 #### 티어 시스템
 | 티어 | 반경 | 영역 크기 | 업그레이드 방법 |
@@ -192,9 +212,29 @@ teams:
   korea:
     id: korea
     display-name: "대한민국"
-    luckperms-group: korea
+    luckperms-group: korea  # ⚠️ LuckPerms 그룹과 반드시 일치!
     color: "#FF0000"  # 빨강
     description: "Korean Empire"
+```
+
+> **⚠️ 중요**: 
+> - `luckperms-group`은 LuckPerms의 실제 그룹명과 **정확히 일치**해야 합니다
+> - team.yml에 등록되지 않은 그룹을 가진 플레이어는 자동으로 "팀없음"으로 처리됩니다
+> - 플레이어는 `/lp user <플레이어> parent add <그룹>`으로 국가에 할당
+
+#### LuckPerms 그룹 생성
+```bash
+# 1. 국가 그룹 생성
+/lp creategroup korea
+/lp creategroup japan
+/lp creategroup china
+
+# 2. 플레이어 할당
+/lp user Player123 parent add korea
+/lp user Player456 parent add japan
+
+# 3. 확인
+/lp user Player123 info
 ```
 
 ---
@@ -334,12 +374,15 @@ War_Declaration_Scroll: 2
 
 ### 🔴 관리자 명령어
 
-| 명령어 | 설명 | 권한 |
-|--------|------|------|
-| `/territory stone` | Tier I 점령석 지급 | `territory.admin` |
-| `/territory scroll` | 전쟁 두루마리 지급 | `territory.admin` |
-| `/territory reload` | 설정 리로드 | `territory.admin` |
-| `/territory endwar <국가>` | 전쟁 강제 종료 | `territory.admin` |
+| 명령어 | 설명 | 권한 | 콘솔 사용 |
+|--------|------|------|----------|
+| `/territory stone` | Tier I 점령석 지급 | `territory.admin` | ❌ |
+| `/territory scroll` | 전쟁 두루마리 지급 | `territory.admin` | ❌ |
+| `/territory reload` | 설정 리로드 | `territory.admin` | ✅ |
+| `/territory startwar <국가>` | 전쟁 즉시 시작 | `territory.admin` | ✅ |
+| `/territory endwar <국가>` | 전쟁 강제 종료 | `territory.admin` | ✅ |
+
+> **💡 콘솔 지원**: `reload`, `startwar`, `endwar` 명령어는 콘솔에서도 사용 가능합니다!
 
 ### 🟢 플레이어 명령어
 
@@ -353,9 +396,20 @@ War_Declaration_Scroll: 2
 | `/territory find` | 가장 가까운 적 점령석 | 없음 |
 | `/territory stones [팀]` | 점령석 목록 | 없음 |
 | `/territory history [팀]` | 전쟁 이력 | 없음 |
+| `/territory score <차수>` | 전쟁 점수 확인 | 없음 |
+| `/territory scorenow` | 현재 전쟁 점수 | 없음 |
+| `/territory cancel` | 지역 이름 입력 취소 | 없음 |
 
 ### 별칭
 - `/territory` = `/terr` = `/t`
+
+### 콘솔 명령어 예시
+```bash
+# 서버 콘솔에서 실행 가능
+territory reload
+territory startwar korea
+territory endwar japan
+```
 
 ---
 
@@ -560,28 +614,81 @@ War_Declaration_Scroll: 200
 
 ## 📊 PlaceholderAPI 변수
 
-### 사용 가능한 변수
+### 플레이어 관련 변수
 
-```
-%territory_war_time_left%        - 전쟁까지 남은 시간
-%territory_player_nation%        - 플레이어 국가
-%territory_chunk_owner%          - 현재 청크 소유자
-%territory_nation_chunks%        - 국가 총 청크
-%territory_nation_stones%        - 국가 점령석 수
-%territory_nation_rank%          - 국가 순위
-%territory_is_war%               - 전쟁 여부
-```
+| 플레이스홀더 | 설명 | 반환 값 예시 |
+|------------|------|------------|
+| `%territory_team%` | **플레이어가 속한 팀** | `korea`, `팀없음` |
+| `%territory_team_display%` | 플레이어 팀 표시 이름 | `대한민국`, `팀없음` |
+| `%territory_team_in_war%` | 플레이어 팀 전쟁 상태 | `예`, `아니오` |
+| `%territory_team_war_time_left%` | 전쟁 시작까지 남은 시간 (초) | `300`, `0` |
+| `%territory_team_war_time_left_formatted%` | 전쟁 시작까지 남은 시간 (MM:SS) | `05:00`, `00:00` |
+| `%territory_owned_chunks%` | 플레이어 팀이 소유한 청크 수 | `156` |
+
+### 위치 관련 변수
+
+| 플레이스홀더 | 설명 | 반환 값 예시 |
+|------------|------|------------|
+| `%territory_chunk_owner%` | 현재 청크 소유자 | `korea`, `없음` |
+| `%territory_chunk_owner_display%` | 현재 청크 소유자 표시 이름 | `대한민국`, `없음` |
+
+### 전역 변수
+
+| 플레이스홀더 | 설명 | 반환 값 예시 |
+|------------|------|------------|
+| `%territory_war_<팀명>%` | 특정 팀의 전쟁 상태 | `전쟁 중`, `평화` |
+| `%territory_warprep_<팀명>%` | 특정 팀의 전쟁 준비 시간 | `05:30`, `없음` |
+| `%territory_total_teams%` | 전체 팀 수 | `5` |
+| `%territory_teams_at_war%` | 전쟁 중인 팀 수 | `2` |
 
 ### 사용 예시
 
+#### 스코어보드
 ```yaml
-# 스코어보드
+# DeluxeScoreboard 예시
 scoreboard:
-  title: "&6Territory Info"
+  title: "&6⚔ Territory Info ⚔"
   lines:
-    - "&e국가: &f%territory_player_nation%"
-    - "&e순위: &f%territory_nation_rank%"
-    - "&e영토: &f%territory_nation_chunks% 청크"
+    - "&e━━━━━━━━━━━━━━━"
+    - "&f내 팀: &b%territory_team_display%"
+    - "&f전쟁: %territory_team_in_war%"
+    - "&f소유 영토: &a%territory_owned_chunks% &7청크"
+    - "&e━━━━━━━━━━━━━━━"
+    - "&f현재 위치: %territory_chunk_owner_display%"
+    - "&e━━━━━━━━━━━━━━━"
+```
+
+#### TAB 메뉴
+```yaml
+# TAB 플러그인 예시
+header:
+  - "&6━━━━━━━━━━━━━━━━━━━"
+  - "&e⚔ Territory Wars ⚔"
+  - "&f당신의 국가: &b%territory_team_display%"
+  - "&f전쟁 상태: %territory_team_in_war%"
+  - "&6━━━━━━━━━━━━━━━━━━━"
+
+tablist-name: "&b%territory_team% &7| &f%player_name%"
+```
+
+#### 채팅 포맷
+```yaml
+# EssentialsChat 예시
+format: "[%territory_team_display%] {DISPLAYNAME}: {MESSAGE}"
+
+# 예시 출력
+# [대한민국] Player123: 안녕하세요!
+```
+
+#### 홀로그램
+```yaml
+# DecentHolograms 예시
+lines:
+  - "&6⚔ 전쟁 현황 ⚔"
+  - "&e전쟁 중인 국가: &c%territory_teams_at_war%개"
+  - "&e평화로운 국가: &a%territory_total_teams%개"
+  - ""
+  - "&7실시간 업데이트!"
 ```
 
 ---
@@ -1617,16 +1724,27 @@ war:
 
 ## 📝 변경 로그
 
-### v1.0-SNAPSHOT (2024-12-10)
-- ✅ 점령석 시스템 구현
-- ✅ 전쟁 시스템 구현
+### v1.0-SNAPSHOT (2025-12-11) - 최신
+#### 🐛 버그 수정
+- 🔧 **점령석 설치 문제 해결**: 60+ 종류의 자연 블록에서 설치 가능하도록 개선
+- 🔧 **콘솔 명령어 지원**: reload, startwar, endwar 명령어 콘솔 사용 가능
+- 🔧 **팀 인식 문제 해결**: team.yml에 없는 그룹은 "팀없음"으로 처리
+
+#### ✨ 개선사항
+- ⚡ **PlaceholderAPI 최적화**: PlayerGroupCache 사용으로 성능 향상
+- 📝 **명령어 추가**: score, scorenow, cancel 명령어 추가
+- 🎯 **에러 처리 개선**: 더 안정적인 팀 감지 시스템
+
+#### 📋 기존 기능
+- ✅ 점령석 시스템 (5단계 티어)
+- ✅ 전쟁 시스템 (전면전)
 - ✅ BlueMap 완전 연동
 - ✅ 다국어 지원 (lang.yml)
 - ✅ 커스텀 모델 데이터 (items.yml)
 - ✅ 통계 및 랭킹 시스템
 - ✅ 전쟁 이력 로깅
 - ✅ 실시간 알림 시스템
-- ✅ 성능 최적화
+- ✅ 성능 최적화 (캐싱)
 
 ---
 
