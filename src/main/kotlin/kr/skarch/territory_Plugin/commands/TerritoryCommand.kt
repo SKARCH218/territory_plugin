@@ -1,7 +1,7 @@
 package kr.skarch.territory_Plugin.commands
 
 import kr.skarch.territory_Plugin.Territory_Plugin
-import net.luckperms.api.LuckPermsProvider
+import kr.skarch.territory_Plugin.utils.PlayerGroupCache
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -554,13 +554,7 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
     }
 
     private fun getPlayerGroup(player: Player): String {
-        return try {
-            val luckPerms = LuckPermsProvider.get()
-            val user = luckPerms.userManager.getUser(player.uniqueId)
-            user?.primaryGroup ?: "default"
-        } catch (e: Exception) {
-            "default"
-        }
+        return PlayerGroupCache.getPlayerGroup(player)
     }
 }
 

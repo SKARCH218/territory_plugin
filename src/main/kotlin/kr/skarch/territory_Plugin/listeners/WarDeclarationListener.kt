@@ -1,10 +1,10 @@
 package kr.skarch.territory_Plugin.listeners
 
 import kr.skarch.territory_Plugin.Territory_Plugin
+import kr.skarch.territory_Plugin.utils.PlayerGroupCache
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.NamedTextColor
-import net.luckperms.api.LuckPermsProvider
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -106,13 +106,7 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
     }
 
     private fun getPlayerGroup(player: Player): String {
-        return try {
-            val luckPerms = LuckPermsProvider.get()
-            val user = luckPerms.userManager.getUser(player.uniqueId)
-            user?.primaryGroup ?: "default"
-        } catch (e: Exception) {
-            "default"
-        }
+        return PlayerGroupCache.getPlayerGroup(player)
     }
 }
 
