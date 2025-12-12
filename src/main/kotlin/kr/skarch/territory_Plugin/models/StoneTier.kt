@@ -7,6 +7,13 @@ enum class StoneTier(val tierName: String, val radius: Int) {
     TIER_4("TIER_4", 10),   // 21x21
     TIER_5("TIER_5", 17);   // 35x35
 
+    /**
+     * Get tier level as integer (1-5)
+     */
+    fun getTierLevel(): Int {
+        return ordinal + 1
+    }
+
     fun getNext(): StoneTier? {
         return when (this) {
             TIER_1 -> TIER_2

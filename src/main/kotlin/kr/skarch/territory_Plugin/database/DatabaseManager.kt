@@ -7,6 +7,8 @@ import kr.skarch.territory_Plugin.models.TerritoryChunk
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import java.io.File
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.sql.Connection
 import java.sql.DriverManager
 import java.util.UUID
@@ -24,11 +26,35 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
 
         connect()
         createTables()
+
+        // Run migrations with backup
+        try {
+            val migrationManager = MigrationManager(connection)
+
+            // Create backup before migrations (only if DB already exists)
+            if (dbFile.exists() && dbFile.length() > 0) {
+                migrationManager.createBackup(dbFile)
+            }
+
+            migrationManager.runMigrations()
+        } catch (e: Exception) {
+            plugin.logger.severe("Failed to run database migrations: ${e.message}")
+            plugin.logger.severe("Please check the backup files and restore if necessary")
+            throw e
+        }
     }
 
     private fun connect() {
         connection = DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
-        connection.createStatement().execute("PRAGMA foreign_keys = ON")
+        connection.createStatement().use { stmt ->
+            stmt.execute("PRAGMA foreign_keys = ON")
+            // Enable WAL mode for better concurrency
+            stmt.execute("PRAGMA journal_mode = WAL")
+            // Set busy timeout to 5 seconds
+            stmt.execute("PRAGMA busy_timeout = 5000")
+            // Synchronous = NORMAL for better performance
+            stmt.execute("PRAGMA synchronous = NORMAL")
+        }
     }
 
     private fun ensureConnection() {
@@ -92,10 +118,13 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
                     nation_name VARCHAR(64) NOT NULL,
                     conquests INT DEFAULT 0,
                     kills INT DEFAULT 0,
-                    total_score INT DEFAULT 0,
+                    lost INT DEFAULT 0,
+                    deaths INT DEFAULT 0,
                     PRIMARY KEY (war_number, nation_name)
                 )
             """)
+
+            // Migrations are now handled by MigrationManager
 
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS war_counter (
@@ -128,6 +157,14 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
             stmt.executeUpdate("""
                 CREATE INDEX IF NOT EXISTS idx_war_history_nation 
                 ON war_history(nation_name, start_time DESC)
+            """)
+
+            // 전쟁 선포 쿨타임 테이블
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS war_cooldowns (
+                    nation_name VARCHAR(64) PRIMARY KEY,
+                    last_war_end_time LONG NOT NULL
+                )
             """)
         }
     }
@@ -432,14 +469,33 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     // ===== 전쟁 넘버링 및 점수 시스템 =====
 
     /**
-     * Get next war number and increment
+     * Get next war number and increment (with transaction safety)
      */
     fun getNextWarNumber(): Int {
         ensureConnection()
-        connection.createStatement().use { stmt ->
-            stmt.executeUpdate("UPDATE war_counter SET current_war_number = current_war_number + 1 WHERE id = 1")
+        val startTime = System.currentTimeMillis()
+
+        try {
+            connection.autoCommit = false
+            connection.createStatement().use { stmt ->
+                stmt.executeUpdate("UPDATE war_counter SET current_war_number = current_war_number + 1 WHERE id = 1")
+            }
+            val warNumber = getCurrentWarNumber()
+            connection.commit()
+
+            val duration = System.currentTimeMillis() - startTime
+            if (duration > plugin.configManager.getSlowQueryThreshold()) {
+                plugin.logger.warning("Slow query detected: getNextWarNumber took ${duration}ms")
+            }
+
+            return warNumber
+        } catch (e: Exception) {
+            connection.rollback()
+            plugin.logger.severe("Failed to get next war number: ${e.message}")
+            throw e
+        } finally {
+            connection.autoCommit = true
         }
-        return getCurrentWarNumber()
     }
 
     /**
@@ -461,32 +517,52 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     }
 
     /**
-     * Set war state with war number
+     * Set war state with war number (with transaction safety)
      */
     fun setWarState(nationName: String, isWar: Boolean, warNumber: Int) {
-        val sql = """
-            INSERT OR REPLACE INTO war_states 
-            (nation_name, is_global_war, war_start_time)
-            VALUES (?, ?, ?)
-        """
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, nationName)
-            stmt.setBoolean(2, isWar)
-            stmt.setLong(3, System.currentTimeMillis())
-            stmt.executeUpdate()
-        }
+        ensureConnection()
+        val startTime = System.currentTimeMillis()
 
-        // Initialize war score entry
-        if (isWar) {
-            val scoreSql = """
-                INSERT OR IGNORE INTO war_scores (war_number, nation_name, conquests, kills, total_score)
-                VALUES (?, ?, 0, 0, 0)
+        try {
+            connection.autoCommit = false
+
+            val sql = """
+                INSERT OR REPLACE INTO war_states 
+                (nation_name, is_global_war, war_start_time)
+                VALUES (?, ?, ?)
             """
-            connection.prepareStatement(scoreSql).use { scoreStmt ->
-                scoreStmt.setInt(1, warNumber)
-                scoreStmt.setString(2, nationName)
-                scoreStmt.executeUpdate()
+            connection.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, nationName)
+                stmt.setBoolean(2, isWar)
+                stmt.setLong(3, System.currentTimeMillis())
+                stmt.executeUpdate()
             }
+
+            // Initialize war score entry
+            if (isWar) {
+                val scoreSql = """
+                    INSERT OR IGNORE INTO war_scores (war_number, nation_name, conquests, kills, lost, deaths)
+                    VALUES (?, ?, 0, 0, 0, 0)
+                """
+                connection.prepareStatement(scoreSql).use { scoreStmt ->
+                    scoreStmt.setInt(1, warNumber)
+                    scoreStmt.setString(2, nationName)
+                    scoreStmt.executeUpdate()
+                }
+            }
+
+            connection.commit()
+
+            val duration = System.currentTimeMillis() - startTime
+            if (duration > plugin.configManager.getSlowQueryThreshold()) {
+                plugin.logger.warning("Slow query detected: setWarState took ${duration}ms")
+            }
+        } catch (e: Exception) {
+            connection.rollback()
+            plugin.logger.severe("Failed to set war state for $nationName: ${e.message}")
+            throw e
+        } finally {
+            connection.autoCommit = true
         }
     }
 
@@ -530,12 +606,10 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     fun incrementWarConquest(nationName: String, warNumber: Int) {
         ensureConnection()
         val sql = """
-            INSERT INTO war_scores (war_number, nation_name, conquests, kills, total_score)
-            VALUES (?, ?, 1, 0, 1)
+            INSERT INTO war_scores (war_number, nation_name, conquests, kills, lost, deaths)
+            VALUES (?, ?, 1, 0, 0, 0)
             ON CONFLICT(war_number, nation_name) 
-            DO UPDATE SET 
-                conquests = conquests + 1,
-                total_score = conquests + 1 + (kills / 2)
+            DO UPDATE SET conquests = conquests + 1
         """
         connection.prepareStatement(sql).use { stmt ->
             stmt.setInt(1, warNumber)
@@ -550,12 +624,46 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     fun incrementWarKill(nationName: String, warNumber: Int) {
         ensureConnection()
         val sql = """
-            INSERT INTO war_scores (war_number, nation_name, conquests, kills, total_score)
-            VALUES (?, ?, 0, 1, 0)
+            INSERT INTO war_scores (war_number, nation_name, conquests, kills, lost, deaths)
+            VALUES (?, ?, 0, 1, 0, 0)
             ON CONFLICT(war_number, nation_name) 
-            DO UPDATE SET 
-                kills = kills + 1,
-                total_score = conquests + ((kills + 1) / 2)
+            DO UPDATE SET kills = kills + 1
+        """
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setInt(1, warNumber)
+            stmt.setString(2, nationName)
+            stmt.executeUpdate()
+        }
+    }
+
+    /**
+     * Increment lost (stones destroyed) for a nation in current war
+     */
+    fun incrementWarLost(nationName: String, warNumber: Int) {
+        ensureConnection()
+        val sql = """
+            INSERT INTO war_scores (war_number, nation_name, conquests, kills, lost, deaths)
+            VALUES (?, ?, 0, 0, 1, 0)
+            ON CONFLICT(war_number, nation_name)
+            DO UPDATE SET lost = lost + 1
+        """
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setInt(1, warNumber)
+            stmt.setString(2, nationName)
+            stmt.executeUpdate()
+        }
+    }
+
+    /**
+     * Increment deaths (player deaths) for a nation in current war
+     */
+    fun incrementWarDeath(nationName: String, warNumber: Int) {
+        ensureConnection()
+        val sql = """
+            INSERT INTO war_scores (war_number, nation_name, conquests, kills, lost, deaths)
+            VALUES (?, ?, 0, 0, 0, 1)
+            ON CONFLICT(war_number, nation_name)
+            DO UPDATE SET deaths = deaths + 1
         """
         connection.prepareStatement(sql).use { stmt ->
             stmt.setInt(1, warNumber)
@@ -579,6 +687,20 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * Get lost (stones destroyed) count for a nation in specific war
+     */
+    fun getWarLostCount(nationName: String, warNumber: Int): Int {
+        ensureConnection()
+        val sql = "SELECT lost FROM war_scores WHERE war_number = ? AND nation_name = ?"
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setInt(1, warNumber)
+            stmt.setString(2, nationName)
+            val rs = stmt.executeQuery()
+            return if (rs.next()) rs.getInt("lost") else 0
+        }
+    }
+
+    /**
      * Get kill count for a nation in specific war
      */
     fun getWarKillCount(nationName: String, warNumber: Int): Int {
@@ -593,17 +715,44 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * Get death (player deaths) count for a nation in specific war
+     */
+    fun getWarDeathCount(nationName: String, warNumber: Int): Int {
+        ensureConnection()
+        val sql = "SELECT deaths FROM war_scores WHERE war_number = ? AND nation_name = ?"
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setInt(1, warNumber)
+            stmt.setString(2, nationName)
+            val rs = stmt.executeQuery()
+            return if (rs.next()) rs.getInt("deaths") else 0
+        }
+    }
+
+    /**
      * Get war score for specific war number
+     * Calculates score in real-time: (conquests - lost) + round((kills - deaths) / 2.0)
      */
     fun getWarScore(warNumber: Int): Map<String, Int> {
         ensureConnection()
         val scores = mutableMapOf<String, Int>()
-        val sql = "SELECT nation_name, total_score FROM war_scores WHERE war_number = ?"
+        val sql = "SELECT nation_name, conquests, kills, lost, deaths FROM war_scores WHERE war_number = ?"
         connection.prepareStatement(sql).use { stmt ->
             stmt.setInt(1, warNumber)
             val rs = stmt.executeQuery()
             while (rs.next()) {
-                scores[rs.getString("nation_name")] = rs.getInt("total_score")
+                val conquests = rs.getInt("conquests")
+                val kills = rs.getInt("kills")
+                val lost = rs.getInt("lost")
+                val deaths = rs.getInt("deaths")
+
+                // Calculate score with HALF_UP rounding
+                val stoneScore = conquests - lost
+                val combatScore = BigDecimal((kills - deaths) / 2.0)
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .toInt()
+                val totalScore = stoneScore + combatScore
+
+                scores[rs.getString("nation_name")] = totalScore
             }
         }
         return scores
@@ -622,10 +771,53 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
         }
     }
 
+    /**
+     * Set war cooldown for a nation
+     */
+    fun setWarCooldown(nationName: String, endTime: Long = System.currentTimeMillis()) {
+        ensureConnection()
+        val sql = """
+            INSERT OR REPLACE INTO war_cooldowns (nation_name, last_war_end_time)
+            VALUES (?, ?)
+        """
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, nationName)
+            stmt.setLong(2, endTime)
+            stmt.executeUpdate()
+        }
+    }
+
+    /**
+     * Get remaining cooldown time for a nation (in seconds)
+     * Returns 0 if no cooldown or cooldown expired
+     */
+    fun getRemainingCooldown(nationName: String, cooldownSeconds: Long): Long {
+        ensureConnection()
+        val sql = "SELECT last_war_end_time FROM war_cooldowns WHERE nation_name = ?"
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, nationName)
+            val rs = stmt.executeQuery()
+            if (rs.next()) {
+                val lastEndTime = rs.getLong("last_war_end_time")
+                val cooldownMs = cooldownSeconds * 1000
+                val elapsed = System.currentTimeMillis() - lastEndTime
+                val remaining = cooldownMs - elapsed
+                return if (remaining > 0) remaining / 1000 else 0
+            }
+            return 0
+        }
+    }
+
+    /**
+     * Check if nation can declare war (cooldown expired)
+     */
+    fun canDeclareWar(nationName: String, cooldownSeconds: Long): Boolean {
+        return getRemainingCooldown(nationName, cooldownSeconds) == 0L
+    }
+
     fun close() {
         if (::connection.isInitialized && !connection.isClosed) {
             connection.close()
         }
     }
 }
-

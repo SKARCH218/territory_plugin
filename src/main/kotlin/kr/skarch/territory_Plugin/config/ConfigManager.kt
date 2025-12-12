@@ -66,10 +66,199 @@ class ConfigManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * 카운트다운 알림 시점 목록 (초)
+     */
+    fun getCountdownAlerts(): List<Int> {
+        return config.getIntegerList("war.countdown-alerts").ifEmpty { listOf(300, 60, 30, 10) }
+    }
+
+    /**
      * 전쟁 최소 지속 시간 (초)
      */
     fun getWarMinimumDuration(): Int {
         return config.getInt("war.minimum-duration", 1800)
+    }
+
+    /**
+     * 전쟁 선포 비용 활성화 여부
+     */
+    fun isWarDeclarationCostEnabled(): Boolean {
+        return config.getBoolean("war.declaration-cost.enabled", true)
+    }
+
+    /**
+     * 전쟁 선포 비용 (돈)
+     */
+    fun getWarDeclarationCost(): Double {
+        return config.getDouble("war.declaration-cost.money", 50000.0)
+    }
+
+    /**
+     * 전쟁 선포 쿨타임 (초)
+     */
+    fun getWarDeclarationCooldown(): Long {
+        return config.getLong("war.declaration-cooldown", 7200L)
+    }
+
+    /**
+     * 전쟁 선포국 버프 활성화 여부
+     */
+    fun isAttackerBuffsEnabled(): Boolean {
+        return config.getBoolean("war.attacker-buffs.enabled", true)
+    }
+
+    /**
+     * 전쟁 선포국 버프 지속 시간 (초)
+     */
+    fun getAttackerBuffsDuration(): Int {
+        return config.getInt("war.attacker-buffs.duration", 1800)
+    }
+
+    /**
+     * 전쟁 선포국 버프 효과 목록
+     */
+    fun getAttackerBuffEffects(): List<String> {
+        return config.getStringList("war.attacker-buffs.effects")
+    }
+
+    /**
+     * 전쟁 선포국 버프 브로드캐스트 여부
+     */
+    fun isAttackerBuffsBroadcast(): Boolean {
+        return config.getBoolean("war.attacker-buffs.broadcast-message", true)
+    }
+
+    /**
+     * 전쟁 보상 시스템 활성화 여부
+     */
+    fun isWarRewardsEnabled(): Boolean {
+        return config.getBoolean("war.rewards.enabled", true)
+    }
+
+    /**
+     * 승리 보상 돈
+     */
+    fun getVictoryRewardMoney(): Double {
+        return config.getDouble("war.rewards.victory.money", 100000.0)
+    }
+
+    /**
+     * 승리 보상 아이템 목록
+     */
+    fun getVictoryRewardItems(): List<String> {
+        return config.getStringList("war.rewards.victory.items")
+    }
+
+    /**
+     * 승리 보상 명령어 목록
+     */
+    fun getVictoryRewardCommands(): List<String> {
+        return config.getStringList("war.rewards.victory.commands")
+    }
+
+    /**
+     * 참여 보상: 몇 킬마다 보상
+     */
+    fun getParticipationKillsPerReward(): Int {
+        return config.getInt("war.rewards.participation.kills-per-reward", 10)
+    }
+
+    /**
+     * 참여 보상 돈
+     */
+    fun getParticipationRewardMoney(): Double {
+        return config.getDouble("war.rewards.participation.money", 5000.0)
+    }
+
+    /**
+     * MVP 보상 활성화 여부
+     */
+    fun isMvpRewardEnabled(): Boolean {
+        return config.getBoolean("war.rewards.mvp.enabled", true)
+    }
+
+    /**
+     * MVP 보상 돈
+     */
+    fun getMvpRewardMoney(): Double {
+        return config.getDouble("war.rewards.mvp.money", 50000.0)
+    }
+
+    /**
+     * MVP 보상 아이템 목록
+     */
+    fun getMvpRewardItems(): List<String> {
+        return config.getStringList("war.rewards.mvp.items")
+    }
+
+    /**
+     * 점령석 티어별 능력 활성화 여부
+     */
+    fun isStoneAbilitiesEnabled(): Boolean {
+        return config.getBoolean("occupation-stone.tier-abilities.enabled", true)
+    }
+
+    /**
+     * 특정 티어의 효과 반경
+     */
+    fun getStoneEffectRadius(tier: Int): Int {
+        return config.getInt("occupation-stone.tier-abilities.tier-$tier.effect-radius", 15)
+    }
+
+    /**
+     * 특정 티어의 효과 목록
+     */
+    fun getStoneEffects(tier: Int): List<String> {
+        return config.getStringList("occupation-stone.tier-abilities.tier-$tier.effects")
+    }
+
+    /**
+     * 특정 티어의 방어 보너스
+     */
+    fun getStoneDefenseBonus(tier: Int): Double {
+        return config.getDouble("occupation-stone.tier-abilities.tier-$tier.defense-bonus", 0.0)
+    }
+
+    /**
+     * 특정 티어의 공격 보너스
+     */
+    fun getStoneAttackBonus(tier: Int): Double {
+        return config.getDouble("occupation-stone.tier-abilities.tier-$tier.attack-bonus", 0.0)
+    }
+
+    /**
+     * 효과 적용 주기 (틱)
+     */
+    fun getEffectApplyInterval(): Long {
+        return config.getLong("occupation-stone.effect-apply-interval", 60L)
+    }
+
+    /**
+     * 플레이어 그룹 캐시 TTL (밀리초)
+     */
+    fun getPlayerGroupCacheTTL(): Long {
+        return config.getLong("cache.player-group-ttl", 300000L)
+    }
+
+    /**
+     * 캐시 정리 주기 (밀리초)
+     */
+    fun getCacheCleanupInterval(): Long {
+        return config.getLong("cache.cleanup-interval", 60000L)
+    }
+
+    /**
+     * 느린 쿼리 경고 임계값 (밀리초)
+     */
+    fun getSlowQueryThreshold(): Long {
+        return config.getLong("performance.slow-query-threshold", 100L)
+    }
+
+    /**
+     * 최대 DB 연결 풀 크기
+     */
+    fun getMaxDbConnections(): Int {
+        return config.getInt("performance.max-db-connections", 10)
     }
 
     /**

@@ -19,10 +19,26 @@ object PlayerGroupCache {
     )
 
     private val cache = ConcurrentHashMap<UUID, CachedGroup>()
-    private val CACHE_DURATION_MS = 300000L // 5분 (밀리초)
+    private var cacheDurationMs = 300000L // 기본값 5분, 설정값으로 오버라이드됨
 
     fun getPlayerGroup(player: Player): String {
         return getPlayerGroup(player.uniqueId)
+    }
+
+    /**
+     * Initialize cache with config values
+     */
+    fun initialize(plugin: Territory_Plugin) {
+        cacheDurationMs = plugin.configManager.getPlayerGroupCacheTTL()
+
+        // Schedule cleanup task
+        val cleanupInterval = plugin.configManager.getCacheCleanupInterval()
+        Bukkit.getScheduler().runTaskTimerAsynchronously(
+            plugin,
+            Runnable { cleanupExpired() },
+            cleanupInterval / 50, // Convert ms to ticks
+            cleanupInterval / 50
+        )
     }
 
     fun getPlayerGroup(uuid: UUID): String {
@@ -30,7 +46,7 @@ object PlayerGroupCache {
         val now = System.currentTimeMillis()
 
         // Check if cache is valid
-        if (cached != null && (now - cached.timestamp) < CACHE_DURATION_MS) {
+        if (cached != null && (now - cached.timestamp) < cacheDurationMs) {
             return cached.group
         }
 
@@ -57,13 +73,23 @@ object PlayerGroupCache {
                         .map { plugin.configManager.getTeamLuckPermsGroup(it) }
                         .toSet()
 
-                    // Find intersection: player's groups that are registered as nations
-                    val validNationGroups = playerGroups.intersect(registeredNations)
+                    // Filter player's groups to only those registered in team.yml
+                    val validNationGroups = playerGroups.filter { it in registeredNations }
 
-                    // Return first valid nation group, or "팀없음" if no valid nation found
-                    validNationGroups.firstOrNull() ?: "팀없음"
+                    // Return first nation group according to team.yml order
+                    // This ensures that if player has multiple groups (e.g., "admin" and "korea"),
+                    // only the groups registered in team.yml will be considered as nations
+                    val firstMatch = if (validNationGroups.isNotEmpty()) {
+                        plugin.configManager.getTeamIds()
+                            .map { plugin.configManager.getTeamLuckPermsGroup(it) }
+                            .firstOrNull { it in validNationGroups }
+                    } else {
+                        null
+                    }
+
+                    firstMatch ?: "팀없음"
                 } else {
-                    // Plugin not loaded yet, check if primary group is valid
+                    // Plugin not loaded yet
                     "팀없음"
                 }
             }
@@ -87,7 +113,16 @@ object PlayerGroupCache {
 
     fun cleanupExpired() {
         val now = System.currentTimeMillis()
-        cache.entries.removeIf { (now - it.value.timestamp) >= CACHE_DURATION_MS }
+        cache.entries.removeIf { (now - it.value.timestamp) >= cacheDurationMs }
+    }
+
+    /**
+     * Get cache statistics
+     */
+    fun getCacheStats(): Map<String, Int> {
+        return mapOf(
+            "size" to cache.size,
+            "expired" to cache.count { (System.currentTimeMillis() - it.value.timestamp) >= cacheDurationMs }
+        )
     }
 }
-

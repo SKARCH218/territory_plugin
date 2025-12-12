@@ -61,6 +61,8 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
                         if (plugin.warManager.isInGlobalWar(playerGroup) ||
                             plugin.warManager.isInGlobalWar(stone.ownerGroup)) {
                             plugin.warManager.recordConquest(playerGroup)
+                            // 기록: 피해국의 잃은 점령석 수 증가
+                            plugin.warManager.recordLost(stone.ownerGroup)
                         }
 
                         // Play break effect
@@ -257,6 +259,8 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
             if (plugin.warManager.isInGlobalWar(killerGroup) ||
                 plugin.warManager.isInGlobalWar(victimGroup)) {
                 plugin.warManager.recordKill(killerGroup)
+                // 기록: 피해국의 죽음 수 증가
+                plugin.warManager.recordDeath(victimGroup)
             }
         }
     }
@@ -334,4 +338,3 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
         return PlayerGroupCache.getPlayerGroup(player)
     }
 }
-

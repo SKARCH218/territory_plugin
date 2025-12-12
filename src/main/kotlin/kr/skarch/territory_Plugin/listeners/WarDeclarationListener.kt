@@ -48,11 +48,37 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
             return
         }
 
+        // Check cooldown
+        val (canDeclare, remainingCooldown) = plugin.warManager.canDeclareWar(playerGroup)
+        if (!canDeclare) {
+            val hours = remainingCooldown / 3600
+            val minutes = (remainingCooldown % 3600) / 60
+            player.sendMessage("§c전쟁 선포 쿨타임이 남아있습니다! (${hours}시간 ${minutes}분)")
+            event.isCancelled = true
+            return
+        }
+
         // Check if pending war
         if (plugin.warManager.hasPendingWar(playerGroup)) {
             player.sendMessage("§c이미 전쟁 선포가 진행 중입니다!")
             event.isCancelled = true
             return
+        }
+
+        // Check cost
+        if (plugin.configManager.isWarDeclarationCostEnabled()) {
+            val cost = plugin.configManager.getWarDeclarationCost()
+            val economy = plugin.server.servicesManager.getRegistration(
+                net.milkbowl.vault.economy.Economy::class.java
+            )?.provider
+
+            if (economy != null) {
+                if (economy.getBalance(player) < cost) {
+                    player.sendMessage("§c전쟁 선포 비용이 부족합니다! (필요: ${cost}원)")
+                    event.isCancelled = true
+                    return
+                }
+            }
         }
 
         // Store pending confirmation
@@ -98,6 +124,23 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
         }
 
         if (confirm) {
+            // Charge cost
+            if (plugin.configManager.isWarDeclarationCostEnabled()) {
+                val cost = plugin.configManager.getWarDeclarationCost()
+                val economy = plugin.server.servicesManager.getRegistration(
+                    net.milkbowl.vault.economy.Economy::class.java
+                )?.provider
+
+                if (economy != null) {
+                    if (economy.getBalance(player) < cost) {
+                        player.sendMessage("§c전쟁 선포 비용이 부족합니다! (필요: ${cost}원)")
+                        return
+                    }
+                    economy.withdrawPlayer(player, cost)
+                    player.sendMessage("§e전쟁 선포 비용 ${cost}원이 차감되었습니다.")
+                }
+            }
+
             plugin.warManager.declareGlobalWar(pending.nationName)
             player.sendMessage("§c전면전이 선포되었습니다! 10분 후 전투가 시작됩니다!")
         } else {
