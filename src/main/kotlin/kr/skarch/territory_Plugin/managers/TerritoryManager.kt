@@ -199,6 +199,7 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
     /**
      * Claim chunks in a radius around the center location
      * ONLY claims chunks that are currently unclaimed (priority system)
+     * 먼저 점령한 팀이 우선권을 가지며, 이미 점령된 청크는 덮어쓰지 않음
      */
     fun claimArea(center: Location, radius: Int, group: String, stoneId: UUID): Int {
         val centerChunk = center.chunk
@@ -213,6 +214,7 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
                 val chunkKey = "${world.name};$chunkX;$chunkZ"
 
                 // Priority system: Only claim if chunk is unclaimed
+                // 먼저 점령한 팀이 우선권을 가짐 - 겹치는 영역은 기존 소유자 유지
                 val existingOwner = plugin.databaseManager.getChunkOwner(chunkKey)
                 if (existingOwner == null) {
                     val chunk = TerritoryChunk(chunkKey, group, stoneId)
@@ -220,6 +222,7 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
                     claimedCount++
                 }
                 // If already owned, skip it (do not overwrite)
+                // 이미 점령된 청크는 건드리지 않음 - 우선권 시스템
             }
         }
 

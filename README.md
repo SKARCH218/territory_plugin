@@ -1,17 +1,17 @@
 # 🏰 Territory Plugin - 완벽 가이드
 
-[![Version](https://img.shields.io/badge/version-1.0--SNAPSHOT-blue.svg)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.3-blue.svg)](https://github.com)
 [![Minecraft](https://img.shields.io/badge/minecraft-1.20.4+-green.svg)](https://www.minecraft.net)
 [![API](https://img.shields.io/badge/Paper-API-orange.svg)](https://papermc.io)
-[![Updated](https://img.shields.io/badge/updated-2025--12--11-brightgreen.svg)](https://github.com)
+[![Updated](https://img.shields.io/badge/updated-2025--12--15-brightgreen.svg)](https://github.com)
 
 **Territory Plugin**은 Minecraft Paper 서버를 위한 강력한 영토 점령 및 전쟁 시스템입니다.
 
-> **🆕 최신 업데이트 (2025-12-11)**
-> - ✅ 점령석 설치 문제 해결 (60+ 블록 타입 지원)
-> - ✅ 콘솔 명령어 지원 (reload, startwar, endwar)
-> - ✅ 팀 인식 개선 ("팀없음" 자동 처리)
-> - ✅ PlaceholderAPI 성능 최적화
+> **🆕 최신 업데이트 (2025-12-15) - v1.3**
+> - ✅ **영주 시스템 추가** - 영주 전용 버프 및 20% 업그레이드 할인
+> - ✅ **적 영토 침입 PvP** - 전쟁 중이 아니어도 침입자 공격 가능
+> - ✅ **청크 우선권 시스템** - 먼저 점령한 팀이 소유권 유지
+> - ✅ **팀 변경 즉시 반영** - reload 명령어로 캐시 초기화
 
 ---
 
@@ -19,14 +19,16 @@
 
 1. [개요](#-개요)
 2. [주요 기능](#-주요-기능)
-3. [설치 방법](#-설치-방법)
-4. [기본 사용법](#-기본-사용법)
-5. [설정 파일](#-설정-파일)
-6. [명령어](#-명령어)
-7. [권한](#-권한)
-8. [BlueMap 연동](#-bluemap-연동)
-9. [다국어 지원](#-다국어-지원)
-10. [개발자 정보](#-개발자-정보)
+3. [영주 시스템](#-영주-시스템-new)
+4. [설치 방법](#-설치-방법)
+5. [기본 사용법](#-기본-사용법)
+6. [설정 파일](#-설정-파일)
+7. [명령어](#-명령어)
+8. [권한](#-권한)
+9. [BlueMap 연동](#-bluemap-연동)
+10. [다국어 지원](#-다국어-지원)
+11. [변경 사항](#-변경-사항)
+12. [개발자 정보](#-개발자-정보)
 
 ---
 
@@ -35,10 +37,61 @@
 Territory Plugin은 다음을 제공합니다:
 - 🏴 **점령석 시스템**: 청크 기반 영토 점령
 - ⚔️ **전쟁 시스템**: 국가 간 전면전
+- 👑 **영주 시스템**: 영주 전용 버프 및 특권 (NEW!)
 - 🗺️ **BlueMap 연동**: 웹 맵에서 실시간 영토 확인
 - 🎨 **완전한 커스터마이징**: 모든 메시지와 색상 변경 가능
 - 💰 **경제 시스템**: Vault 연동 업그레이드 비용
 - 📊 **통계 시스템**: 국가별 랭킹과 전쟁 이력
+- 🛡️ **영토 방어**: 평화 시에도 침입자 공격 가능 (NEW!)
+
+---
+
+## ⚡ 빠른 시작 가이드
+
+### 1단계: 설치
+```bash
+# 1. 플러그인 다운로드 및 설치
+plugins/territory_Plugin.jar
+
+# 2. 필수 플러그인 설치
+plugins/LuckPerms.jar
+
+# 3. 서버 시작
+java -jar paper.jar
+```
+
+### 2단계: 팀 설정
+```yaml
+# plugins/territory_Plugin/team.yml
+teams:
+  korea:
+    display-name: "대한민국"
+    luckperms-group: "korea"
+    color: "#FF0000"
+    lords:
+      - "YourName"  # 영주 지정!
+```
+
+### 3단계: LuckPerms 그룹 생성
+```bash
+/lp creategroup korea
+/lp user Steve parent add korea
+```
+
+### 4단계: 게임 시작!
+```bash
+# 점령석 받기 (관리자)
+/territory stone
+
+# 점령석 설치
+우클릭으로 설치
+
+# 영토 확장
+점령석 우클릭 → 업그레이드
+
+# 전쟁 선포
+/territory scroll → 우클릭
+```
 
 ---
 
@@ -113,6 +166,7 @@ Territory Plugin은 다음을 제공합니다:
 │ ✅ 본인 팀 땅: 모든 작업 가능    │
 │ ❌ 다른 팀 땅: 차단              │
 │ ❌ 주인 없는 땅: 차단            │
+│ ⚔️ 침입자 공격: 가능 (NEW!)     │
 └─────────────────────────────────┘
 
 ┌─────────────────────────────────┐
@@ -123,6 +177,24 @@ Territory Plugin은 다음을 제공합니다:
 │ 💥 점령석 파괴 가능              │
 └─────────────────────────────────┘
 ```
+
+#### 적 영토 방어 시스템 (NEW!)
+- 🛡️ **평화 시에도 침입자 공격 가능**
+  - 다른 나라 플레이어가 우리 영토에 침입 시
+  - 영토 소유 팀만 침입자를 공격 가능
+  - 제3자는 공격 불가 (영토 분쟁 방지)
+- 📢 **자동 경고 메시지**
+  - 공격자: "§e적 영토 방어! §c[침입자]§e를 공격합니다!"
+  - 침입자: "§c경고! 적 영토에 침입하여 공격받고 있습니다!"
+
+#### 청크 우선권 시스템 (NEW!)
+- 🏁 **먼저 점령한 팀이 우선권**
+  - 점령석 업그레이드로 영역 확장 시
+  - 이미 점령된 청크는 건드리지 않음
+  - 비어있는 청크만 새로 점령
+- 🔒 **안전한 영토 확장**
+  - 겹치는 영역 발생 방지
+  - 기존 소유권 보호
 
 ### 4. BlueMap 연동
 
@@ -215,12 +287,17 @@ teams:
     luckperms-group: korea  # ⚠️ LuckPerms 그룹과 반드시 일치!
     color: "#FF0000"  # 빨강
     description: "Korean Empire"
+    lords:  # 👑 NEW! 영주 설정
+      - "Player1"
+      - "Player2"
+      - "Notch"
 ```
 
 > **⚠️ 중요**: 
 > - `luckperms-group`은 LuckPerms의 실제 그룹명과 **정확히 일치**해야 합니다
 > - team.yml에 등록되지 않은 그룹을 가진 플레이어는 자동으로 "팀없음"으로 처리됩니다
 > - 플레이어는 `/lp user <플레이어> parent add <그룹>`으로 국가에 할당
+> - **영주는 마인크래프트 닉네임으로 지정** (대소문자 구분)
 
 #### LuckPerms 그룹 생성
 ```bash
@@ -236,6 +313,116 @@ teams:
 # 3. 확인
 /lp user Player123 info
 ```
+
+---
+
+## 👑 영주 시스템 (NEW!)
+
+### 개요
+영주는 국가의 리더로서 특별한 혜택과 권한을 가진 플레이어입니다.
+
+### 영주 지정 방법
+
+#### 1. team.yml 수정
+```yaml
+teams:
+  korea:
+    display-name: "대한민국"
+    luckperms-group: "korea"
+    color: "#FF0000"
+    lords:
+      - "Steve"      # 마인크래프트 닉네임
+      - "Alex"       # 여러 명 지정 가능
+      - "Herobrine"
+```
+
+#### 2. 서버에서 적용
+```bash
+/territory reload
+```
+
+#### 3. 확인
+```bash
+/territory lords          # 내 팀의 영주 목록
+/territory lords korea    # korea 팀의 영주 목록
+```
+
+### 영주 전용 혜택
+
+#### 🎁 버프 (자동 적용)
+| 버프 | 레벨 | 지속시간 | 조건 |
+|------|------|----------|------|
+| 신속 | II | 15초 (반복) | 항상 |
+| 재생 | I | 15초 (반복) | 항상 |
+| 힘 | I | 15초 (반복) | 자기 영토 내 |
+
+#### 💰 경제 혜택
+- **점령석 업그레이드 20% 할인**
+  - 일반 플레이어: Tier 1→2 업그레이드 $10,000
+  - 영주: Tier 1→2 업그레이드 **$8,000**
+
+#### 📊 GUI 표시
+영주가 업그레이드 GUI를 열면:
+```
+┌─────────────────────────────────┐
+│    § 6★ 영주 할인 적용 ★        │
+│                                 │
+│ §e요구사항:                     │
+│ §a✔ §7돈: §6$8,000 (20% 할인!) │
+│ §a✔ §7점령 시간: 1시간 0분      │
+└─────────────────────────────────┘
+```
+
+### 영주 관리
+
+#### 영주 추가
+1. `plugins/territory_Plugin/team.yml` 열기
+2. 해당 팀의 `lords` 리스트에 닉네임 추가
+3. `/territory reload` 실행
+
+#### 영주 제거
+1. `team.yml`에서 해당 닉네임 삭제
+2. `/territory reload` 실행
+
+#### 영주 목록 확인
+```
+/territory lords          # 내 팀 영주
+/territory lords [팀ID]   # 특정 팀 영주
+```
+
+### 영주 활용 예시
+
+#### 전투 상황
+```
+[영주가 자기 영토에서 전투 시]
+- 신속 II: 빠른 이동
+- 재생 I: 체력 회복
+- 힘 I: 강력한 공격
+→ 압도적인 방어력!
+```
+
+#### 영토 확장
+```
+[일반 플레이어]
+Tier 1 → Tier 2: $10,000
+Tier 2 → Tier 3: $25,000
+Tier 3 → Tier 4: $50,000
+Tier 4 → Tier 5: $100,000
+총: $185,000
+
+[영주]
+Tier 1 → Tier 2: $8,000  (-$2,000)
+Tier 2 → Tier 3: $20,000 (-$5,000)
+Tier 3 → Tier 4: $40,000 (-$10,000)
+Tier 4 → Tier 5: $80,000 (-$20,000)
+총: $148,000 (총 $37,000 절약!)
+```
+
+### 주의사항
+- ⚠️ 영주는 **마인크래프트 닉네임**으로 지정 (대소문자 구분)
+- ⚠️ 영주가 팀을 떠나도 자동으로 제거되지 않음 (수동 제거 필요)
+- ⚠️ 영주는 여러 명 지정 가능
+- ⚠️ 버프는 3초마다 자동 적용
 
 ---
 
@@ -409,6 +596,66 @@ War_Declaration_Scroll: 2
 territory reload
 territory startwar korea
 territory endwar japan
+```
+
+---
+
+## 📜 명령어
+
+### 플레이어 명령어
+
+| 명령어 | 설명 | 권한 |
+|--------|------|------|
+| `/territory stone` | Tier I 점령석 받기 | `territory.admin` |
+| `/territory scroll` | 전쟁 선포 두루마리 받기 | `territory.admin` |
+| `/territory info` | 현재 위치 영토 정보 | 없음 |
+| `/territory upgrade` | 점령석 업그레이드 GUI | `territory.upgrade` |
+| `/territory team` | 등록된 팀 목록 | 없음 |
+| `/territory stats [팀]` | 국가 통계 확인 | 없음 |
+| `/territory ranking` | 국가 랭킹 확인 | 없음 |
+| `/territory find` | 가장 가까운 적 점령석 찾기 | 없음 |
+| `/territory stones [팀]` | 점령석 목록 확인 | 없음 |
+| `/territory history [팀]` | 전쟁 이력 확인 | 없음 |
+| `/territory score <차수>` | 전쟁 점수 확인 | 없음 |
+| `/territory scoreNow` | 현재 전쟁 실시간 점수 | 없음 |
+| `/territory lords [팀]` | 영주 목록 확인 (NEW!) | 없음 |
+| `/territory cancel` | 지역 이름 입력 취소 | 없음 |
+
+### 관리자 명령어
+
+| 명령어 | 설명 | 권한 |
+|--------|------|------|
+| `/territory reload` | 설정 파일 리로드 | `territory.admin` |
+| `/territory startwar <국가>` | 전쟁 즉시 시작 | `territory.admin` |
+| `/territory endwar <국가>` | 전쟁 종료 | `territory.admin` |
+| `/war-confirm <yes\|no>` | 전쟁 선포 확인 | `territory.war.declare` |
+
+### 명령어 별칭
+
+```
+/territory = /terr = /t
+```
+
+### 사용 예시
+
+```bash
+# 영토 정보 확인
+/territory info
+
+# 업그레이드 GUI 열기
+/t upgrade
+
+# 랭킹 확인
+/t ranking
+
+# 영주 목록 확인
+/t lords korea
+
+# 설정 리로드 (캐시 초기화 포함)
+/t reload
+
+# 전쟁 즉시 시작 (관리자)
+/t startwar korea
 ```
 
 ---
@@ -1299,7 +1546,44 @@ if (success) {
 territoryPlugin.territoryManager.destroyStone(stone, newOwnerGroup)
 ```
 
-#### 4. 전쟁 시스템 API
+#### 4. 영주 시스템 API (NEW!)
+
+```kotlin
+// 플레이어가 영주인지 확인
+val isLord = territoryPlugin.lordManager.isLord(player)
+if (isLord) {
+    player.sendMessage("§6당신은 영주입니다!")
+}
+
+// 특정 팀의 영주인지 확인
+val isLordOfTeam = territoryPlugin.lordManager.isLordOfTeam(player, "korea")
+
+// 영주 버프 수동 적용 (일반적으로 자동 적용됨)
+territoryPlugin.lordManager.applyLordBonuses(player)
+
+// 영주 업그레이드 할인율 가져오기
+val discount = territoryPlugin.lordManager.getUpgradeDiscount(player)
+val originalPrice = 10000.0
+val discountedPrice = originalPrice * (1.0 - discount)
+player.sendMessage("할인가: $${discountedPrice}")
+
+// 모든 온라인 영주에게 메시지 전송
+territoryPlugin.lordManager.broadcastToLords("§6[영주 알림] 중요한 공지사항!")
+
+// 특정 팀의 온라인 영주에게 메시지 전송
+territoryPlugin.lordManager.broadcastToTeamLords("korea", "§6[대한민국 영주] 회의 소집!")
+
+// 팀의 영주 목록 가져오기
+val lords = territoryPlugin.configManager.getTeamLords("korea")
+lords.forEach { lordName ->
+    println("영주: $lordName")
+}
+
+// 영주가 점령석을 관리할 수 있는지 확인
+val canManage = territoryPlugin.lordManager.canManageStone(player, stoneOwnerGroup)
+```
+
+#### 5. 전쟁 시스템 API
 
 ```kotlin
 // 전쟁 상태 확인
@@ -1722,9 +2006,37 @@ war:
 
 ---
 
-## 📝 변경 로그
+## 📝 변경 사항
 
-### v1.0-SNAPSHOT (2025-12-11) - 최신
+### v1.3 (2025-12-15) - 최신 ⭐
+#### 🆕 새로운 기능
+- 👑 **영주 시스템 추가**
+  - team.yml에서 마인크래프트 닉네임으로 영주 지정
+  - 영주 전용 버프 자동 적용 (신속 II, 재생 I, 힘 I)
+  - 점령석 업그레이드 20% 할인
+  - `/territory lords [팀]` 명령어로 영주 목록 확인
+  
+- ⚔️ **적 영토 침입 PvP 시스템**
+  - 전쟁 중이 아니어도 다른 나라 영토 침입자 공격 가능
+  - 영토 소유 팀만 침입자 공격 가능 (제3자 공격 차단)
+  - 침입 시 자동 경고 메시지 출력
+  
+- 🗺️ **청크 우선권 시스템**
+  - 먼저 점령한 팀이 소유권 유지
+  - 점령석 업그레이드 시 기존 소유 청크 보호
+  - 안전한 영토 확장 보장
+  
+- 🔄 **팀 변경 즉시 반영**
+  - `/territory reload` 명령어로 플레이어 그룹 캐시 초기화
+  - LuckPerms 그룹 변경 또는 team.yml 수정 후 즉시 적용
+
+#### 🔧 기술적 개선
+- 새로운 LordManager 클래스 추가
+- CombatListener에 복잡한 PvP 조건 처리 로직 추가
+- StoneAbilityManager에 영주 버프 통합
+- ConfigManager에 영주 관련 메서드 추가
+
+### v1.2 (2025-12-11)
 #### 🐛 버그 수정
 - 🔧 **점령석 설치 문제 해결**: 60+ 종류의 자연 블록에서 설치 가능하도록 개선
 - 🔧 **콘솔 명령어 지원**: reload, startwar, endwar 명령어 콘솔 사용 가능
@@ -1735,6 +2047,7 @@ war:
 - 📝 **명령어 추가**: score, scorenow, cancel 명령어 추가
 - 🎯 **에러 처리 개선**: 더 안정적인 팀 감지 시스템
 
+### v1.0 (초기 버전)
 #### 📋 기존 기능
 - ✅ 점령석 시스템 (5단계 티어)
 - ✅ 전쟁 시스템 (전면전)

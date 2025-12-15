@@ -16,12 +16,19 @@ teams:
     # 팀 설명
     description: "한반도의 수호자"
 
+    # 영주 (마인크래프트 닉네임, 여러 명 가능)
+    lords:
+      - "Player1"
+      - "Player2"
+
   # 예시 팀 2
   japan:
     display-name: "일본"
     luckperms-group: "japan"
     color: "#FFFFFF"
     description: "동해의 전사들"
+    lords:
+      - "JapanLord"
 
   # 예시 팀 3
   china:
@@ -29,9 +36,15 @@ teams:
     luckperms-group: "china"
     color: "#FFFF00"
     description: "대륙의 강자"
+    lords: []  # 영주 없음
 
 # 팀 추가 방법:
 # 1. 위 형식대로 새 팀 항목 추가
 # 2. LuckPerms에서 동일한 그룹 생성: /lp creategroup <그룹명>
 # 3. 플러그인 리로드: /territory reload
+
+# 영주 시스템:
+# - lords에 마인크래프트 닉네임을 추가하면 영주로 지정됩니다
+# - 영주는 특별한 권한과 혜택을 받습니다
+# - 여러 명의 영주를 지정할 수 있습니다
 

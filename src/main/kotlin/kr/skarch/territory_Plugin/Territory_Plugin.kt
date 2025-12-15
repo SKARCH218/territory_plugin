@@ -13,6 +13,7 @@ import kr.skarch.territory_Plugin.listeners.LuckPermsListener
 import kr.skarch.territory_Plugin.listeners.StoneUpgradeListener
 import kr.skarch.territory_Plugin.listeners.WarDeclarationListener
 import kr.skarch.territory_Plugin.managers.BlueMapManager
+import kr.skarch.territory_Plugin.managers.LordManager
 import kr.skarch.territory_Plugin.managers.StatsManager
 import kr.skarch.territory_Plugin.managers.StoneAbilityManager
 import kr.skarch.territory_Plugin.managers.TerritoryManager
@@ -32,6 +33,7 @@ class Territory_Plugin : JavaPlugin() {
     lateinit var blueMapManager: BlueMapManager
     lateinit var statsManager: StatsManager
     lateinit var stoneAbilityManager: StoneAbilityManager
+    lateinit var lordManager: LordManager
     private var luckPermsListener: LuckPermsListener? = null
 
     // 점령석 설치 대기 중인 플레이어들 (UUID -> PendingStone)
@@ -64,6 +66,7 @@ class Territory_Plugin : JavaPlugin() {
         blueMapManager = BlueMapManager(this)
         statsManager = StatsManager(this)
         stoneAbilityManager = StoneAbilityManager(this)
+        lordManager = LordManager(this)
         logger.info("관리자 시스템 초기화 완료")
 
         // Initialize PlayerGroupCache with config values

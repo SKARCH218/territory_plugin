@@ -46,6 +46,11 @@ class StoneAbilityManager(private val plugin: Territory_Plugin) {
             val playerGroup = PlayerGroupCache.getPlayerGroup(player)
             if (playerGroup == "팀없음") return@forEach
 
+            // 영주 버프 먼저 적용
+            if (plugin.lordManager.isLord(player)) {
+                plugin.lordManager.applyLordBonuses(player)
+            }
+
             // Find closest stone of player's nation
             val closestStone = allStones
                 .filter { it.ownerGroup == playerGroup }

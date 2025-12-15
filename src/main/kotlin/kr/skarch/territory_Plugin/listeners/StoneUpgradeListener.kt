@@ -76,17 +76,31 @@ class StoneUpgradeListener(private val plugin: Territory_Plugin) : Listener {
 
             val currentTierNum = stone.currentTier.ordinal + 1
             val nextTierNum = nextTier.ordinal + 1
-            val requiredMoney = plugin.configManager.getUpgradeMoney(currentTierNum, nextTierNum)
+            var requiredMoney = plugin.configManager.getUpgradeMoney(currentTierNum, nextTierNum)
             val requiredTime = plugin.configManager.getUpgradeOccupationTime(currentTierNum, nextTierNum)
             val requiredHours = requiredTime / 3600
             val requiredMinutes = (requiredTime % 3600) / 60
 
+            // 영주 할인 적용
+            val isLord = plugin.lordManager.isLord(player)
+            if (isLord) {
+                val discount = plugin.lordManager.getUpgradeDiscount(player)
+                requiredMoney *= (1.0 - discount)
+            }
+
             val lore = mutableListOf(
                 "§7반경: ${nextTier.radius} 청크",
                 "§7영역: ${nextTier.radius * 2 + 1}x${nextTier.radius * 2 + 1}",
-                "",
-                "§e요구사항:"
+                ""
             )
+
+            // 영주 표시
+            if (isLord) {
+                lore.add("§6★ 영주 할인 적용 ★")
+                lore.add("")
+            }
+
+            lore.add("§e요구사항:")
 
             if (plugin.configManager.isUpgradeCostEnabled()) {
                 val hasEnoughMoney = plugin.server.pluginManager.getPlugin("Vault") != null &&
@@ -156,8 +170,16 @@ class StoneUpgradeListener(private val plugin: Territory_Plugin) : Listener {
 
             val currentTierNum = stone.currentTier.ordinal + 1
             val nextTierNum = nextTier.ordinal + 1
-            val requiredMoney = plugin.configManager.getUpgradeMoney(currentTierNum, nextTierNum)
+            var requiredMoney = plugin.configManager.getUpgradeMoney(currentTierNum, nextTierNum)
             val requiredTime = plugin.configManager.getUpgradeOccupationTime(currentTierNum, nextTierNum)
+
+            // 영주 할인 적용
+            val isLord = plugin.lordManager.isLord(player)
+            if (isLord) {
+                val discount = plugin.lordManager.getUpgradeDiscount(player)
+                requiredMoney *= (1.0 - discount)
+                player.sendMessage("§6[영주 혜택] §e업그레이드 비용 ${(discount * 100).toInt()}% 할인!")
+            }
 
             // Check time requirement
             if (stone.getOccupationTime() < requiredTime) {

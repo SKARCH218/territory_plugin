@@ -382,6 +382,34 @@ class ConfigManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * 팀의 영주 목록 (마인크래프트 닉네임)
+     */
+    fun getTeamLords(teamId: String): List<String> {
+        return teamConfig.getStringList("teams.$teamId.lords")
+    }
+
+    /**
+     * 특정 플레이어가 특정 팀의 영주인지 확인
+     */
+    fun isLord(playerName: String, teamId: String): Boolean {
+        return getTeamLords(teamId).any { it.equals(playerName, ignoreCase = true) }
+    }
+
+    /**
+     * 특정 플레이어가 영주인지 확인 (모든 팀 검색)
+     */
+    fun isLordOfAnyTeam(playerName: String): Boolean {
+        return getTeamIds().any { teamId -> isLord(playerName, teamId) }
+    }
+
+    /**
+     * 플레이어가 영주인 팀 ID 찾기
+     */
+    fun getLordTeamId(playerName: String): String? {
+        return getTeamIds().firstOrNull { teamId -> isLord(playerName, teamId) }
+    }
+
+    /**
      * LuckPerms 그룹명으로 팀 ID 찾기
      */
     fun getTeamIdByLuckPermsGroup(groupName: String): String? {
@@ -411,7 +439,8 @@ class ConfigManager(private val plugin: Territory_Plugin) {
             displayName = getTeamDisplayName(teamId),
             luckPermsGroup = getTeamLuckPermsGroup(teamId),
             color = getTeamColor(teamId),
-            description = getTeamDescription(teamId)
+            description = getTeamDescription(teamId),
+            lords = getTeamLords(teamId)
         )
     }
 
@@ -470,6 +499,7 @@ data class TeamInfo(
     val displayName: String,
     val luckPermsGroup: String,
     val color: String,
-    val description: String
+    val description: String,
+    val lords: List<String> = emptyList()
 )
 

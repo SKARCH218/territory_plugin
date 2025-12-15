@@ -39,6 +39,7 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
             "score" -> showWarScore(sender, args)
             "scorenow" -> showCurrentWarScore(sender)
             "cancel" -> cancelRegionInput(sender)
+            "lord", "lords" -> showLords(sender, args)
             else -> sendHelp(sender)
         }
 
@@ -59,6 +60,7 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         player.sendMessage("§e/territory history [팀] §7- 전쟁 이력을 확인합니다")
         player.sendMessage("§e/territory score <차수> §7- 전쟁 점수를 확인합니다")
         player.sendMessage("§e/territory scoreNow §7- 현재 전쟁의 실시간 점수를 확인합니다")
+        player.sendMessage("§e/territory lords [팀] §7- 영주 목록을 확인합니다")
         player.sendMessage("§e/territory cancel §7- 지역 이름 입력을 취소합니다")
         player.sendMessage("§e/territory reload §7- 설정 파일을 리로드합니다 (관리자)")
         player.sendMessage("§e/territory startwar [nation] §7- 전쟁을 즉시 시작합니다 (관리자)")
@@ -270,6 +272,10 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         plugin.configManager.reload()
         plugin.langManager.reload()
         plugin.itemManager.reload()
+
+        // 플레이어 그룹 캐시 즉시 초기화 (팀 변경 사항 즉시 반영)
+        PlayerGroupCache.invalidateAll()
+        sender.sendMessage("§a플레이어 그룹 캐시를 초기화했습니다. 팀 변경 사항이 즉시 반영됩니다!")
 
         sender.sendMessage(plugin.langManager.getMessage("reload_success"))
         sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "config.yml"))
@@ -546,6 +552,58 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         } else {
             player.sendMessage("§c진행 중인 지역 이름 입력이 없습니다.")
         }
+    }
+
+    private fun showLords(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            // 플레이어 본인의 팀 영주 표시
+            val playerGroup = getPlayerGroup(player)
+            if (playerGroup == "팀없음") {
+                player.sendMessage("§c팀에 속해있지 않습니다!")
+                return
+            }
+
+            val teamId = plugin.configManager.getTeamIdByLuckPermsGroup(playerGroup)
+            if (teamId == null) {
+                player.sendMessage("§c팀 정보를 찾을 수 없습니다!")
+                return
+            }
+
+            showTeamLords(player, teamId)
+        } else {
+            // 특정 팀의 영주 표시
+            val teamId = args[1]
+            if (!plugin.configManager.teamExists(teamId)) {
+                player.sendMessage("§c존재하지 않는 팀입니다!")
+                return
+            }
+
+            showTeamLords(player, teamId)
+        }
+    }
+
+    private fun showTeamLords(player: Player, teamId: String) {
+        val teamInfo = plugin.configManager.getTeamInfo(teamId) ?: return
+        val lords = teamInfo.lords
+
+        player.sendMessage("§6=== ${teamInfo.displayName} 영주 목록 ===")
+
+        if (lords.isEmpty()) {
+            player.sendMessage("§e등록된 영주가 없습니다.")
+            return
+        }
+
+        val onlinePlayers = org.bukkit.Bukkit.getOnlinePlayers().map { it.name }.toSet()
+
+        lords.forEachIndexed { index, lordName ->
+            val isOnline = lordName in onlinePlayers
+            val status = if (isOnline) "§a[온라인]" else "§7[오프라인]"
+            player.sendMessage("§e${index + 1}. §6★ §f$lordName $status")
+        }
+
+        player.sendMessage("")
+        player.sendMessage("§7총 ${lords.size}명의 영주")
+        player.sendMessage("§7온라인: ${lords.count { it in onlinePlayers }}명")
     }
 
     companion object {
