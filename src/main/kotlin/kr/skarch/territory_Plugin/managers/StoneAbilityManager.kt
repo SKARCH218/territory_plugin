@@ -23,8 +23,7 @@ class StoneAbilityManager(private val plugin: Territory_Plugin) {
      */
     fun initialize() {
         if (!plugin.configManager.isStoneAbilitiesEnabled()) {
-            plugin.logger.info("점령석 특수 능력 시스템이 비활성화되어 있습니다.")
-            return
+            return  // 로그 제거
         }
 
         val interval = plugin.configManager.getEffectApplyInterval()
@@ -33,7 +32,7 @@ class StoneAbilityManager(private val plugin: Territory_Plugin) {
             applyStoneAbilities()
         }, interval, interval)
 
-        plugin.logger.info("점령석 특수 능력 시스템이 활성화되었습니다. (${interval}틱마다 적용)")
+        // 로그 제거
     }
 
     /**

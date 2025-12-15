@@ -1,17 +1,18 @@
 # 🏰 Territory Plugin - 완벽 가이드
 
-[![Version](https://img.shields.io/badge/version-1.3-blue.svg)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.4-blue.svg)](https://github.com)
 [![Minecraft](https://img.shields.io/badge/minecraft-1.20.4+-green.svg)](https://www.minecraft.net)
 [![API](https://img.shields.io/badge/Paper-API-orange.svg)](https://papermc.io)
 [![Updated](https://img.shields.io/badge/updated-2025--12--15-brightgreen.svg)](https://github.com)
 
 **Territory Plugin**은 Minecraft Paper 서버를 위한 강력한 영토 점령 및 전쟁 시스템입니다.
 
-> **🆕 최신 업데이트 (2025-12-15) - v1.3**
-> - ✅ **영주 시스템 추가** - 영주 전용 버프 및 20% 업그레이드 할인
-> - ✅ **적 영토 침입 PvP** - 전쟁 중이 아니어도 침입자 공격 가능
-> - ✅ **청크 우선권 시스템** - 먼저 점령한 팀이 소유권 유지
-> - ✅ **팀 변경 즉시 반영** - reload 명령어로 캐시 초기화
+> **🆕 최신 업데이트 (2025-12-15) - v1.4**
+> - ✅ **적 영토 침입자 디버프** - 구속 II + 나약함 II 적용 (평화 시)
+> - ✅ **광역 세뇌 스킬 API** - Skript 연동으로 영토 탈취 스킬 구현 가능
+> - ✅ **전초기지 점령석** - 1청크만 점령, 업그레이드 불가
+> - ✅ **영지 청크 위치 API** - 영지의 모든 청크 좌표 조회
+> - ✅ **콘솔 로그 정리** - 불필요한 로그 제거로 깨끗한 콘솔
 
 ---
 
@@ -35,14 +36,16 @@
 ## 🎯 개요
 
 Territory Plugin은 다음을 제공합니다:
-- 🏴 **점령석 시스템**: 청크 기반 영토 점령
+- 🏴 **점령석 시스템**: 청크 기반 영토 점령 (5단계 티어 + 전초기지)
 - ⚔️ **전쟁 시스템**: 국가 간 전면전
-- 👑 **영주 시스템**: 영주 전용 버프 및 특권 (NEW!)
+- 👑 **영주 시스템**: 영주 전용 버프 및 특권
+- 🎯 **Territory API**: Skript 연동으로 커스텀 스킬 제작 가능 (12개 메서드)
+- 🛡️ **영토 방어**: 평화 시에도 침입자 공격 가능 + 디버프 적용
 - 🗺️ **BlueMap 연동**: 웹 맵에서 실시간 영토 확인
 - 🎨 **완전한 커스터마이징**: 모든 메시지와 색상 변경 가능
 - 💰 **경제 시스템**: Vault 연동 업그레이드 비용
 - 📊 **통계 시스템**: 국가별 랭킹과 전쟁 이력
-- 🛡️ **영토 방어**: 평화 시에도 침입자 공격 가능 (NEW!)
+- 🧹 **최적화**: 깨끗한 콘솔 로그, 효율적인 캐싱
 
 ---
 
@@ -136,24 +139,79 @@ teams:
 1. **방법 1**: 점령석 우클릭 → GUI 오픈
 2. **방법 2**: `/territory upgrade` 명령어 (방어 블록이 있어도 가능!)
 
-### 2. 전쟁 시스템
+### 2. 전쟁 시스템 (글로벌 전면전)
 
 #### 전쟁 선포
 1. 전쟁 선포 두루마리 획득 (`/territory scroll`)
 2. 두루마리 우클릭
 3. 확인 클릭 `[YES]`
-4. **10분 카운트다운** 시작
-5. 전면전 발생
+4. **10분 카운트다운** 시작 (config 설정 가능)
+5. **모든 국가가 자동으로 전쟁 참여** (글로벌 전면전)
+
+#### 전쟁 진행
+- **지속 시간**: 1시간 (config.yml에서 변경 가능)
+- **모든 국가 참여**: 자동 참여, 선택 불가
+- **점령 가능**: 점령석 파괴 시 영토 이전
+- **점령석 파괴 ≠ 전쟁 종료**: 점령은 가능하지만 전쟁은 계속됨
+
+#### 전쟁 종료 조건
+
+**1. 시간 종료 (기본 1시간) - 스코어 기반 승리**
+```
+1. 스코어 계산: (파괴한 점령석 - 잃은 점령석) + (획득 영토 - 잃은 영토) / 2
+2. 최고 점수 팀 확인
+
+[1위가 1개 팀]
+→ 1위 팀이 모든 항복비 독식
+
+[1위가 여러 팀 (동점)]
+→ 동점 팀들이 항복비 균등 분배
+→ 예: 3개 팀이 모두 5점으로 동점 = 3등분
+
+※ 무조건 스코어로 승부! 동점일 때만 균등 분배
+```
+
+**2. 항복 시스템** `/territory surrender`
+```
+- 항복비 자동 계산: 기본 $100,000
+  - 잃은 영토 1개당 -5% 할인
+  - 획득한 영토 1개당 +10% 페널티
+- 1개 국가만 남으면 즉시 종료
+- 승전국이 모든 항복비 획득
+```
+
+**3. 관리자 명령어**
+```bash
+/territory endwar  # 글로벌 전쟁 강제 종료
+/territory startwar  # 글로벌 전쟁 즉시 시작
+```
+
+#### 전쟁 스코어 계산
+```
+팀 스코어 = (파괴한 점령석 - 잃은 점령석) + (획득 영토 - 잃은 영토) / 2
+
+예시:
+- 점령석 3개 파괴, 1개 잃음 = +2점
+- 영토 10개 획득, 4개 잃음 = +3점
+- 총 스코어 = 5점
+```
+
+실시간 스코어 확인: `/territory scorenow`
 
 #### 전쟁 규칙
 - **평화 시**: 본인 팀 땅만 상호작용 가능
 - **전쟁 시**: 모든 땅에서 상호작용 가능
-- **점령석 파괴**: 적 점령석 파괴 시 모든 영토 획득
+- **점령석 파괴**: 적 점령석 파괴 시 모든 영토 획득 (전쟁은 계속)
+- **항복 가능**: 팀 리더 또는 권한 보유자만 항복 가능
 
 #### 전쟁 특징
-- 🌍 **전면전**: 선포한 국가 vs 전 세계
+- 🌍 **글로벌 전면전**: 모든 국가 강제 참여
 - ⏰ **10분 준비 시간**: 방어 준비 가능
-- 📢 **실시간 알림**: 점령석 파괴 시 국가 멤버 전체 알림
+- ⏱️ **1시간 지속**: config.yml에서 변경 가능
+- 💰 **항복 시스템**: 동적 항복비 계산
+- 📊 **스코어 기반 승리**: 시간 종료 시 최고 점수 팀 승리
+- 🏆 **1위 독식 or 동점 분배**: 스코어에 따라 보상 분배
+- 📢 **실시간 알림**: 점령석 파괴, 항복 시 전체 알림
 - 📝 **전쟁 이력**: 모든 전쟁 기록 저장
 
 ### 3. 영토 보호
@@ -187,6 +245,15 @@ teams:
   - 공격자: "§e적 영토 방어! §c[침입자]§e를 공격합니다!"
   - 침입자: "§c경고! 적 영토에 침입하여 공격받고 있습니다!"
 
+#### 침입자 디버프 시스템 (NEW! v1.4)
+- 💀 **적 영토 침입 시 자동 디버프** (평화 시에만)
+  - 구속 II (Slowness II) - 이동 속도 대폭 감소
+  - 나약함 II (Weakness II) - 공격력 대폭 감소
+  - 지속시간: 10초 (반복 적용)
+- ⚠️ **경고 메시지**: "§c⚠ 경고! 적 영토에 침입 중입니다! 구속과 나약함이 적용됩니다!"
+- 🔓 **자동 해제**: 본인 영토 복귀 시 즉시 해제
+- 🎯 **전쟁 중 미적용**: 전쟁 중에는 디버프 없이 정상 전투
+
 #### 청크 우선권 시스템 (NEW!)
 - 🏁 **먼저 점령한 팀이 우선권**
   - 점령석 업그레이드로 영역 확장 시
@@ -212,7 +279,79 @@ http://서버IP:8100
 → 팀별 영토 확인
 ```
 
-### 5. 통계 시스템
+### 5. Territory API (NEW! v1.4)
+
+#### 개요
+외부 플러그인(Skript 등)에서 Territory Plugin의 기능을 사용할 수 있는 강력한 API를 제공합니다.
+
+#### 주요 기능
+- 🎯 **영토 정보 조회**: 지역명, 소유자, 청크 위치 등
+- 🔄 **영토 소유권 변경**: 광역 세뇌 등의 커스텀 스킬 구현
+- 📊 **통계 조회**: 청크 수, 지역 목록 등
+- 🗺️ **자동 연동**: BlueMap 자동 업데이트, 브로드캐스트 메시지
+
+#### API 메서드 (12개)
+| 메서드 | 설명 | 반환값 |
+|--------|------|--------|
+| `getRegionNameAt(location)` | 위치의 영토 이름 | String? |
+| `getTerritoryOwnerAt(location)` | 위치의 소유자 | String? |
+| `transferTerritoryOwnership(region, owner)` | 영토 소유권 변경 | Boolean |
+| `getRegionChunkLocations(region)` | 영지의 청크 위치 목록 | List<String> |
+| `getRegionChunkCount(region)` | 지역의 청크 수 | Int |
+| `getAllRegionNames()` | 모든 지역명 목록 | List<String> |
+| `getRegionsByOwner(owner)` | 팀의 지역 목록 | List<String> |
+| `doesRegionExist(region)` | 지역 존재 여부 | Boolean |
+| 기타 4개... | 상세 가이드: SKRIPT_API_GUIDE.md | - |
+
+#### 사용 예시 (Skript)
+```skript
+# 광역 세뇌 스킬
+command /광역세뇌 <text>:
+    trigger:
+        set {_api} to plugin "territory_Plugin".territoryAPI
+        set {_success} to {_api}.transferTerritoryOwnership(arg-1, player's primary group)
+        
+        if {_success} is true:
+            send "§a영토 탈취 성공!" to player
+
+# 영지 청크 위치 조회
+command /영토위치 <text>:
+    trigger:
+        set {_api} to plugin "territory_Plugin".territoryAPI
+        set {_chunks::*} to {_api}.getRegionChunkLocations(arg-1)
+        
+        loop {_chunks::*}:
+            # "world;10;20" 형식
+            send "청크: %loop-value%" to player
+```
+
+**상세 가이드**: `SKRIPT_API_GUIDE.md` 참조
+
+### 6. 전초기지 점령석 (NEW! v1.4)
+
+#### 특징
+- **1청크만 점령** (radius = 0)
+- **업그레이드 불가능**
+- **일반 점령석과 동일한 구조** (2x2x2 흑요석)
+- **전략적 용도**: 소규모 거점, 감시 초소, 임시 기지
+
+#### 일반 점령석과 비교
+| 구분 | 전초기지 | 일반 점령석 (TIER_1~5) |
+|------|----------|----------------------|
+| 점령 범위 | **1청크** | 3x3 ~ 35x35 청크 |
+| 업그레이드 | ❌ 불가능 | ✅ TIER_5까지 |
+| 구조 | 2x2x2 흑요석 | 2x2x2 흑요석 |
+| 용도 | 전초 기지, 감시 초소 | 주요 거점, 영토 확장 |
+| 명령어 | `/territory outpost` | `/territory stone` |
+
+#### 설치 방법
+1. `/territory outpost` 명령어로 아이템 받기 (관리자)
+2. 원하는 위치에서 아이템 우클릭
+3. 지역 이름 입력
+4. 1청크만 점령됨
+5. 업그레이드 불가 (의도된 설계)
+
+### 7. 통계 시스템
 
 #### 국가 통계
 - 📊 총 영토 (청크 수)
@@ -456,7 +595,32 @@ Tier 4 → Tier 5: $80,000 (-$20,000)
 4. 10분 후 전면전!
 ```
 
-#### 4. 영토 방어
+#### 4. 전쟁 승리 (종료)
+```
+전쟁은 다음 방법으로 종료됩니다:
+
+[시간 종료 - 스코어 기반]
+1. 1시간 경과
+2. 스코어 자동 계산
+   - 스코어 = (파괴한 점령석 - 잃은 점령석) + (획득 영토 - 잃은 영토) / 2
+3. 최고 점수 팀 확인
+   - 1위 단독: 모든 항복비 독식
+   - 동점: 동점 팀들이 균등 분배
+
+[항복으로 종료]
+1. /territory surrender 명령어
+2. 항복비 차감 (동적 계산)
+3. 1개 국가만 남으면 즉시 종료
+4. 승전국이 모든 항복비 획득
+
+[관리자 강제 종료]
+/territory endwar
+
+[실시간 스코어 확인]
+/territory scorenow - 현재 순위 확인
+```
+
+#### 5. 영토 방어
 ```
 1. 점령석 주변에 방어 시설 건설
 2. /territory stones로 모든 점령석 위치 확인
@@ -559,17 +723,34 @@ War_Declaration_Scroll: 2
 
 ## 📜 명령어
 
-### 🔴 관리자 명령어
+### 플레이어 명령어
 
-| 명령어 | 설명 | 권한 | 콘솔 사용 |
-|--------|------|------|----------|
-| `/territory stone` | Tier I 점령석 지급 | `territory.admin` | ❌ |
-| `/territory scroll` | 전쟁 두루마리 지급 | `territory.admin` | ❌ |
-| `/territory reload` | 설정 리로드 | `territory.admin` | ✅ |
-| `/territory startwar <국가>` | 전쟁 즉시 시작 | `territory.admin` | ✅ |
-| `/territory endwar <국가>` | 전쟁 강제 종료 | `territory.admin` | ✅ |
+| 명령어 | 설명 | 권한 |
+|--------|------|------|
+| `/territory stone` | Tier I 점령석 받기 | `territory.admin` |
+| `/territory outpost` | 전초기지 점령석 받기 (NEW!) | `territory.admin` |
+| `/territory scroll` | 전쟁 선포 두루마리 받기 | `territory.admin` |
+| `/territory info` | 현재 위치 영토 정보 | 없음 |
+| `/territory upgrade` | 점령석 업그레이드 GUI | `territory.upgrade` |
+| `/territory surrender` | 전쟁 항복 (항복비 차감) (NEW!) | `territory.war.surrender` |
+| `/territory team` | 등록된 팀 목록 | 없음 |
+| `/territory stats [팀]` | 국가 통계 확인 | 없음 |
+| `/territory ranking` | 국가 랭킹 확인 | 없음 |
+| `/territory find` | 가장 가까운 적 점령석 찾기 | 없음 |
+| `/territory stones [팀]` | 점령석 목록 확인 | 없음 |
+| `/territory history [팀]` | 전쟁 이력 확인 | 없음 |
+| `/territory score <차수>` | 전쟁 점수 확인 | 없음 |
+| `/territory scoreNow` | 현재 전쟁 실시간 점수 (NEW!) | 없음 |
+| `/territory lords [팀]` | 영주 목록 확인 | 없음 |
+| `/territory cancel` | 지역 이름 입력 취소 | 없음 |
 
-> **💡 콘솔 지원**: `reload`, `startwar`, `endwar` 명령어는 콘솔에서도 사용 가능합니다!
+### 관리자 명령어
+
+| 명령어 | 설명 | 권한 |
+|--------|------|------|
+| `/territory reload` | 설정 리로드 | `territory.admin` |
+| `/territory startwar` | 글로벌 전쟁 즉시 시작 (NEW!) | `territory.admin` |
+| `/territory endwar` | 글로벌 전쟁 강제 종료 (NEW!) | `territory.admin` |
 
 ### 🟢 플레이어 명령어
 
@@ -596,66 +777,6 @@ War_Declaration_Scroll: 2
 territory reload
 territory startwar korea
 territory endwar japan
-```
-
----
-
-## 📜 명령어
-
-### 플레이어 명령어
-
-| 명령어 | 설명 | 권한 |
-|--------|------|------|
-| `/territory stone` | Tier I 점령석 받기 | `territory.admin` |
-| `/territory scroll` | 전쟁 선포 두루마리 받기 | `territory.admin` |
-| `/territory info` | 현재 위치 영토 정보 | 없음 |
-| `/territory upgrade` | 점령석 업그레이드 GUI | `territory.upgrade` |
-| `/territory team` | 등록된 팀 목록 | 없음 |
-| `/territory stats [팀]` | 국가 통계 확인 | 없음 |
-| `/territory ranking` | 국가 랭킹 확인 | 없음 |
-| `/territory find` | 가장 가까운 적 점령석 찾기 | 없음 |
-| `/territory stones [팀]` | 점령석 목록 확인 | 없음 |
-| `/territory history [팀]` | 전쟁 이력 확인 | 없음 |
-| `/territory score <차수>` | 전쟁 점수 확인 | 없음 |
-| `/territory scoreNow` | 현재 전쟁 실시간 점수 | 없음 |
-| `/territory lords [팀]` | 영주 목록 확인 (NEW!) | 없음 |
-| `/territory cancel` | 지역 이름 입력 취소 | 없음 |
-
-### 관리자 명령어
-
-| 명령어 | 설명 | 권한 |
-|--------|------|------|
-| `/territory reload` | 설정 파일 리로드 | `territory.admin` |
-| `/territory startwar <국가>` | 전쟁 즉시 시작 | `territory.admin` |
-| `/territory endwar <국가>` | 전쟁 종료 | `territory.admin` |
-| `/war-confirm <yes\|no>` | 전쟁 선포 확인 | `territory.war.declare` |
-
-### 명령어 별칭
-
-```
-/territory = /terr = /t
-```
-
-### 사용 예시
-
-```bash
-# 영토 정보 확인
-/territory info
-
-# 업그레이드 GUI 열기
-/t upgrade
-
-# 랭킹 확인
-/t ranking
-
-# 영주 목록 확인
-/t lords korea
-
-# 설정 리로드 (캐시 초기화 포함)
-/t reload
-
-# 전쟁 즉시 시작 (관리자)
-/t startwar korea
 ```
 
 ---
@@ -1546,7 +1667,50 @@ if (success) {
 territoryPlugin.territoryManager.destroyStone(stone, newOwnerGroup)
 ```
 
-#### 4. 영주 시스템 API (NEW!)
+#### 4. Territory API - 광역 세뇌 스킬 (NEW! v1.4)
+
+```kotlin
+// Territory API 접근
+val api = territoryPlugin.territoryAPI
+
+// 1. 현재 위치의 영토 이름 조회
+val regionName = api.getRegionNameAt(player.location)
+player.sendMessage("현재 지역: ${regionName ?: "무주지"}")
+
+// 2. 영토 소유자 조회
+val owner = api.getTerritoryOwnerAt(player)
+player.sendMessage("소유자: ${owner ?: "없음"}")
+
+// 3. 영토 소유권 변경 (광역 세뇌!)
+val success = api.transferTerritoryOwnership("서울", "korea")
+if (success) {
+    // 자동으로 BlueMap 업데이트 및 브로드캐스트됨
+    player.sendMessage("§a광역 세뇌 성공! 서울을 탈취했습니다!")
+} else {
+    player.sendMessage("§c해당 지역을 찾을 수 없습니다!")
+}
+
+// 4. 영지의 모든 청크 위치 조회 (NEW!)
+val chunks = api.getRegionChunkLocations("서울")
+chunks.forEach { chunkKey ->
+    // "world;10;20" 형식
+    val parts = chunkKey.split(";")
+    val world = parts[0]
+    val chunkX = parts[1].toInt()
+    val chunkZ = parts[2].toInt()
+    println("청크: $world ($chunkX, $chunkZ)")
+}
+
+// 5. 지역 정보 조회
+val chunkCount = api.getRegionChunkCount("서울")
+val allRegions = api.getAllRegionNames()
+val koreaRegions = api.getRegionsByOwner("korea")
+val exists = api.doesRegionExist("서울")
+```
+
+**Skript 사용 예시는 `SKRIPT_API_GUIDE.md` 참조**
+
+#### 5. 영주 시스템 API
 
 ```kotlin
 // 플레이어가 영주인지 확인
@@ -2008,7 +2172,40 @@ war:
 
 ## 📝 변경 사항
 
-### v1.3 (2025-12-15) - 최신 ⭐
+### v1.4 (2025-12-15) - 최신 ⭐
+#### 🆕 새로운 기능
+- 🛡️ **적 영토 침입자 디버프 시스템**
+  - 평화 시 적 영토 침입자에게 구속 II + 나약함 II 자동 적용
+  - 전쟁 중에는 디버프 미적용 (정상 전투)
+  - 5초 쿨다운 경고 메시지
+  - 본인 영토 복귀 시 자동 해제
+
+- 🎯 **광역 세뇌 스킬 API** (Skript 연동)
+  - `getRegionNameAt()` - 영토 이름 조회
+  - `getTerritoryOwnerAt()` - 소유자 조회
+  - `transferTerritoryOwnership()` - 영토 소유권 변경
+  - `getRegionChunkLocations()` - 영지의 모든 청크 위치 반환 ⭐
+  - BlueMap 자동 업데이트 및 브로드캐스트
+  - 완벽한 Skript 사용 가이드 제공 (SKRIPT_API_GUIDE.md)
+
+- 🏕️ **전초기지 점령석**
+  - 1청크만 점령 (radius = 0)
+  - 업그레이드 불가능
+  - `/territory outpost` 명령어
+  - 전략적 소규모 거점 건설용
+
+- 🧹 **콘솔 로그 정리**
+  - 불필요한 info 로그 제거
+  - 에러 및 중요 로그만 유지
+  - 깨끗하고 읽기 쉬운 콘솔
+
+#### 🔧 기술적 개선
+- 새로운 TerritoryAPI 클래스 추가 (12개 메서드)
+- DatabaseManager에 지역명 관련 메서드 추가
+- StoneTier에 OUTPOST 추가
+- CombatListener에 디버프 시스템 통합
+
+### v1.3 (2025-12-15)
 #### 🆕 새로운 기능
 - 👑 **영주 시스템 추가**
   - team.yml에서 마인크래프트 닉네임으로 영주 지정

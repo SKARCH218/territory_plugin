@@ -32,7 +32,6 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
         if (itemMeta.displayName != "§cWar Declaration Scroll") return
 
         val player = event.player
-        val playerGroup = getPlayerGroup(player)
 
         // Check if player has permission
         if (!player.hasPermission("territory.war.declare")) {
@@ -42,25 +41,18 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
         }
 
         // Check if already in war
-        if (plugin.warManager.isInGlobalWar(playerGroup)) {
-            player.sendMessage("§c이미 전쟁 중입니다!")
+        if (plugin.warManager.isGlobalWarActive()) {
+            player.sendMessage("§c이미 글로벌 전쟁이 진행 중입니다!")
             event.isCancelled = true
             return
         }
 
         // Check cooldown
-        val (canDeclare, remainingCooldown) = plugin.warManager.canDeclareWar(playerGroup)
-        if (!canDeclare) {
+        val remainingCooldown = plugin.databaseManager.getRemainingCooldown("GLOBAL", plugin.configManager.getWarDeclarationCooldown())
+        if (remainingCooldown > 0) {
             val hours = remainingCooldown / 3600
             val minutes = (remainingCooldown % 3600) / 60
             player.sendMessage("§c전쟁 선포 쿨타임이 남아있습니다! (${hours}시간 ${minutes}분)")
-            event.isCancelled = true
-            return
-        }
-
-        // Check if pending war
-        if (plugin.warManager.hasPendingWar(playerGroup)) {
-            player.sendMessage("§c이미 전쟁 선포가 진행 중입니다!")
             event.isCancelled = true
             return
         }
@@ -82,23 +74,22 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
         }
 
         // Store pending confirmation
-        pendingConfirmations[player.uniqueId] = PendingDeclaration(playerGroup, System.currentTimeMillis())
+        pendingConfirmations[player.uniqueId] = PendingDeclaration("GLOBAL", System.currentTimeMillis())
 
         // Get next war number for display
         val nextWarNumber = plugin.databaseManager.getCurrentWarNumber() + 1
 
         // Send clickable confirmation message
-        val message = Component.text("제 ${nextWarNumber}차 전쟁을 시작하시겠습니까? ")
-            .color(NamedTextColor.RED)
+        val message = Component.text("제 ${nextWarNumber}차 글로벌 전면전을 시작하시겠습니까? ", NamedTextColor.RED)
+            .append(Component.text("모든 국가가 참여합니다!", NamedTextColor.YELLOW))
+            .append(Component.text("\n"))
             .append(
-                Component.text("[YES]")
-                    .color(NamedTextColor.GREEN)
+                Component.text("[YES]", NamedTextColor.GREEN)
                     .clickEvent(ClickEvent.runCommand("/war-confirm yes"))
             )
             .append(Component.text(" / "))
             .append(
-                Component.text("[NO]")
-                    .color(NamedTextColor.RED)
+                Component.text("[NO]", NamedTextColor.RED)
                     .clickEvent(ClickEvent.runCommand("/war-confirm no"))
             )
 
@@ -141,8 +132,11 @@ class WarDeclarationListener(private val plugin: Territory_Plugin) : Listener {
                 }
             }
 
-            plugin.warManager.declareGlobalWar(pending.nationName)
-            player.sendMessage("§c전면전이 선포되었습니다! 10분 후 전투가 시작됩니다!")
+            // 글로벌 전쟁 선포
+            plugin.warManager.declareGlobalWar()
+
+            val prepTime = plugin.configManager.getWarPreparationTime()
+            player.sendMessage("§c글로벌 전면전이 선포되었습니다! ${prepTime/60}분 후 모든 국가가 전쟁 상태로 돌입합니다!")
         } else {
             player.sendMessage("§a전쟁 선포가 취소되었습니다.")
         }

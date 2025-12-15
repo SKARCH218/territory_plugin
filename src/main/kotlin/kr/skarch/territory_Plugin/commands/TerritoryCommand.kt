@@ -24,11 +24,13 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
 
         when (args[0].lowercase()) {
             "stone" -> giveOccupationStone(sender)
+            "outpost" -> giveOutpostStone(sender)
             "scroll" -> giveWarScroll(sender)
             "info" -> showTerritoryInfo(sender)
             "upgrade" -> openUpgradeGUI(sender)
             "endwar" -> endWar(sender, args)
             "startwar" -> startWar(sender, args)
+            "surrender" -> surrenderWar(sender)
             "reload" -> reloadConfig(sender)
             "team", "teams" -> showTeams(sender)
             "stats" -> showStats(sender, args)
@@ -49,6 +51,7 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
     private fun sendHelp(player: Player) {
         player.sendMessage("§6=== Territory Plugin Commands ===")
         player.sendMessage("§e/territory stone §7- Tier I 점령석을 받습니다 (관리자)")
+        player.sendMessage("§e/territory outpost §7- 전초기지 점령석을 받습니다 (관리자)")
         player.sendMessage("§e/territory scroll §7- 전쟁 선포 두루마리를 받습니다 (관리자)")
         player.sendMessage("§e/territory info §7- 현재 위치의 영토 정보를 확인합니다")
         player.sendMessage("§e/territory upgrade §7- 현재 청크의 점령석 업그레이드 GUI를 엽니다")
@@ -88,6 +91,34 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
 
         player.inventory.addItem(stone)
         player.sendMessage(plugin.langManager.getMessage("commands.stone_given"))
+    }
+
+    private fun giveOutpostStone(player: Player) {
+        if (!player.hasPermission("territory.admin")) {
+            player.sendMessage(plugin.langManager.getNoPermission())
+            return
+        }
+
+        val stone = ItemStack(Material.PAPER)
+        val meta = stone.itemMeta
+        meta?.setDisplayName("§6전초기지 점령석")
+        meta?.lore = listOf(
+            "§7전초기지를 건설하는 점령석입니다",
+            "§71청크만 점령하며 업그레이드가 불가능합니다",
+            "§72x2x2 흑요석 구조로 생성됩니다",
+            "§c주의: 업그레이드 불가!"
+        )
+
+        // 커스텀 모델 데이터 적용 (임시로 동일한 값 사용, 나중에 items.yml에 추가 가능)
+        val customModelData = plugin.itemManager.getOccupationStoneTier1CustomModelData()
+        if (customModelData > 0) {
+            meta?.setCustomModelData(customModelData + 10) // 다른 모델로 구분
+        }
+
+        stone.itemMeta = meta
+
+        player.inventory.addItem(stone)
+        player.sendMessage("§a전초기지 점령석을 받았습니다!")
     }
 
     private fun giveWarScroll(player: Player) {
@@ -159,14 +190,8 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
             return
         }
 
-        if (args.size < 2) {
-            player.sendMessage("§c사용법: /territory endwar <nation>")
-            return
-        }
-
-        val nationName = args[1]
-        plugin.warManager.endGlobalWar(nationName)
-        player.sendMessage("§a국가 ${nationName}의 전쟁을 종료했습니다.")
+        plugin.warManager.forceEndWar()
+        player.sendMessage("§a글로벌 전쟁을 강제 종료했습니다.")
     }
 
     private fun startWar(player: Player, args: Array<out String>) {
@@ -175,25 +200,42 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
             return
         }
 
-        if (args.size < 2) {
-            player.sendMessage("§c사용법: /territory startwar <nation>")
-            return
-        }
-
-        val nationName = args[1]
-
         // Check if already in war
-        if (plugin.warManager.isInGlobalWar(nationName)) {
-            player.sendMessage("§c${nationName}은(는) 이미 전쟁 중입니다!")
+        if (plugin.warManager.isGlobalWarActive()) {
+            player.sendMessage("§c이미 글로벌 전쟁이 진행 중입니다!")
             return
         }
-
-        // Get war number before starting
-        val warNumber = plugin.databaseManager.getCurrentWarNumber() + 1
 
         // Start war immediately (skip countdown)
-        plugin.warManager.startWarImmediately(nationName)
-        player.sendMessage("§a${nationName}의 제 ${warNumber}차 전쟁을 즉시 시작했습니다!")
+        plugin.warManager.startWarImmediately()
+        player.sendMessage("§a글로벌 전면전을 즉시 시작했습니다!")
+    }
+
+    private fun surrenderWar(player: Player) {
+        if (!plugin.warManager.isGlobalWarActive()) {
+            player.sendMessage("§c현재 전쟁 중이 아닙니다!")
+            return
+        }
+
+        val playerGroup = getPlayerGroup(player)
+
+        if (playerGroup == "팀없음") {
+            player.sendMessage("§c팀에 속해있지 않습니다!")
+            return
+        }
+
+        // 권한 확인 (팀 리더나 관리자만 항복 가능)
+        if (!player.hasPermission("territory.war.surrender") && !player.hasPermission("territory.admin")) {
+            player.sendMessage("§c항복할 권한이 없습니다! (팀 리더 또는 관리자 필요)")
+            return
+        }
+
+        val success = plugin.warManager.surrender(playerGroup, player)
+
+        if (!success) {
+            // 에러 메시지는 WarManager에서 출력됨
+            return
+        }
     }
 
     private fun showWarScore(player: Player, args: Array<out String>) {
@@ -230,9 +272,7 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
     }
 
     private fun showCurrentWarScore(player: Player) {
-        val activeWars = plugin.warManager.getActiveWars()
-
-        if (activeWars.isEmpty()) {
+        if (!plugin.warManager.isGlobalWarActive()) {
             player.sendMessage("§c현재 진행 중인 전쟁이 없습니다!")
             return
         }
@@ -243,8 +283,14 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         player.sendMessage("§e전쟁 차수: §f${currentWarNumber}차")
         player.sendMessage("")
 
+        // 스코어 계산 및 정렬
         val scores = plugin.warManager.calculateCurrentWarScore()
         val sortedScores = scores.entries.sortedByDescending { it.value }
+
+        if (sortedScores.isEmpty()) {
+            player.sendMessage("§7아직 전쟁 활동이 없습니다.")
+            return
+        }
 
         sortedScores.forEachIndexed { index, entry ->
             val medal = when(index) {
@@ -254,13 +300,25 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
                 else -> "§e${index + 1}."
             }
 
-            val conquests = plugin.warManager.getConquestCount(entry.key)
-            val kills = plugin.warManager.getKillCount(entry.key)
-            val coloredNation = plugin.configManager.getColoredNationName(entry.key)
+            val nationName = entry.key
+            val score = entry.value
+            val coloredNation = plugin.configManager.getColoredNationName(nationName)
+            val stats = plugin.warManager.getWarStats(nationName)
 
-            player.sendMessage("$medal $coloredNation")
-            player.sendMessage("  §7점수: §e${entry.value}점 §7(점령: ${conquests}, 킬: ${kills})")
+            val surrendered = if (plugin.warManager.hasSurrendered(nationName)) " §c[항복]" else ""
+
+            if (stats != null) {
+                player.sendMessage("$medal $coloredNation$surrendered")
+                player.sendMessage("  §7총점: §e%.1f§7점".format(score))
+                player.sendMessage("  §7점령석: §a${stats.stonesDestroyed}§7개 파괴 / §c${stats.stonesLost}§7개 잃음")
+                player.sendMessage("  §7영토: §a${stats.territoriesGained}§7개 획득 / §c${stats.territoriesLost}§7개 잃음")
+            } else {
+                player.sendMessage("$medal $coloredNation: §e%.1f§7점$surrendered".format(score))
+            }
         }
+
+        player.sendMessage("")
+        player.sendMessage("§7스코어 = (파괴한 점령석 - 잃은 점령석) + (획득 영토 - 잃은 영토) / 2")
     }
 
     private fun reloadConfig(sender: CommandSender) {

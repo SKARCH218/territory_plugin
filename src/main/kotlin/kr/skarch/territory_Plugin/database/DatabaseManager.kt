@@ -815,6 +815,71 @@ class DatabaseManager(private val plugin: Territory_Plugin) {
         return getRemainingCooldown(nationName, cooldownSeconds) == 0L
     }
 
+    /**
+     * Get occupation stone by region name
+     */
+    fun getStoneByRegionName(regionName: String): OccupationStone? {
+        ensureConnection()
+        val sql = """
+            SELECT stone_uuid, owner_group, current_tier, world, x, y, z, created_at, region_name
+            FROM occupation_stones
+            WHERE region_name = ?
+        """
+
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, regionName)
+            val rs = stmt.executeQuery()
+
+            if (rs.next()) {
+                val uuid = UUID.fromString(rs.getString("stone_uuid"))
+                val owner = rs.getString("owner_group")
+                val tier = StoneTier.fromString(rs.getString("current_tier"))
+                val worldName = rs.getString("world")
+                val x = rs.getInt("x")
+                val y = rs.getInt("y")
+                val z = rs.getInt("z")
+                val createdAt = rs.getLong("created_at")
+                val region = rs.getString("region_name")
+
+                val world = Bukkit.getWorld(worldName) ?: return null
+                val location = Location(world, x.toDouble(), y.toDouble(), z.toDouble())
+
+                return OccupationStone(uuid, owner, tier, location, createdAt, region)
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Update stone owner (for territory transfer)
+     */
+    fun updateStoneOwner(stoneUuid: UUID, newOwner: String) {
+        ensureConnection()
+        val sql = "UPDATE occupation_stones SET owner_group = ? WHERE stone_uuid = ?"
+
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, newOwner)
+            stmt.setString(2, stoneUuid.toString())
+            stmt.executeUpdate()
+        }
+    }
+
+    /**
+     * Update chunk owner (for territory transfer)
+     */
+    fun updateChunkOwner(chunkKey: String, newOwner: String) {
+        ensureConnection()
+        val sql = "UPDATE territory_chunks SET owner_group = ? WHERE chunk_key = ?"
+
+        connection.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, newOwner)
+            stmt.setString(2, chunkKey)
+            stmt.executeUpdate()
+        }
+    }
+
+
     fun close() {
         if (::connection.isInitialized && !connection.isClosed) {
             connection.close()

@@ -9,6 +9,7 @@ import org.bukkit.inventory.ItemStack
 data class PendingStone(
     val location: Location,
     val ownerGroup: String,
-    val item: ItemStack
+    val item: ItemStack,
+    val isOutpost: Boolean = false  // 전초기지 여부
 )
 

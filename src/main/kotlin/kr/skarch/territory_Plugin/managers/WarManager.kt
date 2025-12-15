@@ -3,486 +3,497 @@ package kr.skarch.territory_Plugin.managers
 import kr.skarch.territory_Plugin.Territory_Plugin
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextColor
 import org.bukkit.Bukkit
 import org.bukkit.scheduler.BukkitRunnable
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
 
 class WarManager(private val plugin: Territory_Plugin) {
 
-    private val pendingWars = ConcurrentHashMap<String, WarCountdown>()
+    // 글로벌 전쟁 상태
+    private var globalWarActive = false
+    private var globalWarNumber = 0
+    private var warStartTime = 0L
+    private var warEndTask: BukkitRunnable? = null
 
-    data class WarCountdown(
-        val task: BukkitRunnable,
-        var timeLeft: Int
+    // 전쟁 준비 카운트다운
+    private var preparationTask: BukkitRunnable? = null
+
+    // 각 국가의 전쟁 통계
+    private val warStats = ConcurrentHashMap<String, NationWarStats>()
+
+    // 항복한 국가 목록
+    private val surrenderedNations = mutableSetOf<String>()
+
+    data class NationWarStats(
+        var territoriesLost: Int = 0,      // 잃은 영토 수
+        var territoriesGained: Int = 0,    // 획득한 영토 수
+        var stonesDestroyed: Int = 0,      // 파괴한 점령석 수
+        var stonesLost: Int = 0            // 잃은 점령석 수
     )
 
     /**
-     * Declare global war for a nation
-     * Broadcasts warning and starts countdown
+     * 글로벌 전면전 선포
+     * 모든 국가가 자동으로 참여
      */
-    fun declareGlobalWar(nationName: String) {
-        // Cancel any existing pending war
-        pendingWars[nationName]?.task?.cancel()
+    fun declareGlobalWar() {
+        // 이미 전쟁 중이면 무시
+        if (globalWarActive || preparationTask != null) {
+            return
+        }
 
         val preparationTime = plugin.configManager.getWarPreparationTime()
-        val countdownAlerts = plugin.configManager.getCountdownAlerts()
         val nextWarNumber = plugin.databaseManager.getNextWarNumber()
-        val coloredNation = plugin.configManager.getColoredNationName(nationName)
+        globalWarNumber = nextWarNumber
 
-        // Initial broadcast using Adventure API
+        // 초기 브로드캐스트
         broadcastComponent(
-            Component.text("⚠ WARNING: ", NamedTextColor.RED)
-                .append(Component.text(coloredNation))
-                .append(Component.text(" 국가가 전면전을 선포했습니다! ${preparationTime / 60}분 후 전투가 시작됩니다.", NamedTextColor.RED))
+            Component.text("⚠⚠⚠ 긴급 경보! ⚠⚠⚠", NamedTextColor.DARK_RED)
         )
         broadcastComponent(
-            Component.text("제 ", NamedTextColor.YELLOW)
-                .append(Component.text("${nextWarNumber}", NamedTextColor.WHITE))
-                .append(Component.text("차 전쟁이 곧 시작됩니다!", NamedTextColor.YELLOW))
+            Component.text("제 ${nextWarNumber}차 글로벌 전면전이 선포되었습니다!", NamedTextColor.RED)
+        )
+        broadcastComponent(
+            Component.text("${preparationTime / 60}분 후 모든 국가가 전쟁 상태로 돌입합니다!", NamedTextColor.YELLOW)
         )
 
-        // Execute declaration commands
-        executeDeclarationCommands(nationName)
+        val countdownAlerts = plugin.configManager.getCountdownAlerts()
 
-        val task = object : BukkitRunnable() {
+        preparationTask = object : BukkitRunnable() {
             var countdown = preparationTime
 
             override fun run() {
                 countdown--
-                pendingWars[nationName]?.timeLeft = countdown
 
-                // Check if countdown matches any alert time
+                // 카운트다운 알림
                 if (countdown in countdownAlerts) {
                     val timeText = when {
                         countdown >= 60 -> "${countdown / 60}분"
                         else -> "${countdown}초"
                     }
                     broadcastComponent(
-                        Component.text("⚔ ", NamedTextColor.YELLOW)
-                            .append(Component.text(coloredNation))
-                            .append(Component.text(" 전쟁이 ${timeText} 후 시작됩니다!", NamedTextColor.YELLOW))
+                        Component.text("⚔ 글로벌 전쟁이 ${timeText} 후 시작됩니다!", NamedTextColor.YELLOW)
                     )
                 }
 
                 if (countdown == 0) {
-                    plugin.databaseManager.setWarState(nationName, true, nextWarNumber)
-                    plugin.databaseManager.logWarStart(nationName, "GLOBAL", nextWarNumber)
-                    broadcastComponent(
-                        Component.text("⚔⚔⚔ 제 ", NamedTextColor.DARK_RED)
-                            .append(Component.text("${nextWarNumber}", NamedTextColor.WHITE))
-                            .append(Component.text("차 전쟁 시작! ", NamedTextColor.DARK_RED))
-                            .append(Component.text(coloredNation))
-                            .append(Component.text("이(가) 전 세계와 전쟁을 시작했습니다! ⚔⚔⚔", NamedTextColor.DARK_RED))
-                    )
-
-                    // 전쟁 선포국 버프 적용
-                    applyAttackerBuffs(nationName)
-
-                    pendingWars.remove(nationName)
+                    startGlobalWar()
                     cancel()
                 }
             }
         }
 
-        task.runTaskTimer(plugin, 0L, 20L) // Run every second
-        pendingWars[nationName] = WarCountdown(task, preparationTime)
+        preparationTask?.runTaskTimer(plugin, 0L, 20L)
     }
 
     /**
-     * Broadcast Adventure Component to all players
+     * 글로벌 전쟁 시작
+     */
+    private fun startGlobalWar() {
+        globalWarActive = true
+        warStartTime = System.currentTimeMillis()
+        preparationTask = null
+        surrenderedNations.clear()
+        warStats.clear()
+
+        // 모든 팀 초기화 (LuckPerms 그룹 기준)
+        val allTeams = plugin.configManager.getAllTeamIds()
+        allTeams.forEach { teamId ->
+            val luckPermsGroup = plugin.configManager.getTeamLuckPermsGroup(teamId)
+            if (luckPermsGroup != null) {
+                warStats[luckPermsGroup] = NationWarStats()
+            }
+        }
+
+        // 데이터베이스에 전쟁 시작 기록
+        plugin.databaseManager.logWarStart("GLOBAL", "GLOBAL_WAR", globalWarNumber)
+
+        broadcastComponent(
+            Component.text("⚔⚔⚔ 제 ${globalWarNumber}차 글로벌 전면전 시작! ⚔⚔⚔", NamedTextColor.DARK_RED)
+        )
+        broadcastComponent(
+            Component.text("모든 국가가 전쟁 상태입니다!", NamedTextColor.RED)
+        )
+
+        val duration = plugin.configManager.getWarDuration()
+        val hours = duration / 3600
+        val minutes = (duration % 3600) / 60
+
+        broadcastComponent(
+            Component.text("전쟁 시간: ${hours}시간 ${minutes}분", NamedTextColor.YELLOW)
+        )
+
+        // 전쟁 종료 타이머 시작
+        scheduleWarEnd(duration)
+    }
+
+    /**
+     * 전쟁 종료 타이머
+     */
+    private fun scheduleWarEnd(durationSeconds: Int) {
+        warEndTask?.cancel()
+
+        warEndTask = object : BukkitRunnable() {
+            override fun run() {
+                endGlobalWar(false)
+            }
+        }
+
+        warEndTask?.runTaskLater(plugin, (durationSeconds * 20).toLong())
+    }
+
+    /**
+     * 글로벌 전쟁 종료
+     */
+    private fun endGlobalWar(forcedEnd: Boolean) {
+        if (!globalWarActive) return
+
+        globalWarActive = false
+        warEndTask?.cancel()
+        warEndTask = null
+
+        val endReason = if (forcedEnd) "관리자 강제 종료" else "시간 종료"
+
+        broadcastComponent(
+            Component.text("✓✓✓ 제 ${globalWarNumber}차 글로벌 전쟁 종료! ✓✓✓", NamedTextColor.GREEN)
+        )
+        broadcastComponent(
+            Component.text("종료 사유: $endReason", NamedTextColor.YELLOW)
+        )
+
+        // 승자 결정 및 항복비 분배
+        distributeWarRewards()
+
+        // 통계 발표
+        announceWarResults()
+
+        // 전쟁 쿨타임 설정
+        plugin.databaseManager.setWarCooldown("GLOBAL")
+
+        // 데이터베이스에 전쟁 종료 기록
+        plugin.databaseManager.logWarEnd("GLOBAL", 0, 0)
+
+        warStats.clear()
+        surrenderedNations.clear()
+    }
+
+    /**
+     * 국가 항복
+     */
+    fun surrender(nationName: String, player: org.bukkit.entity.Player): Boolean {
+        if (!globalWarActive) {
+            player.sendMessage("§c현재 전쟁 중이 아닙니다!")
+            return false
+        }
+
+        if (surrenderedNations.contains(nationName)) {
+            player.sendMessage("§c이미 항복한 국가입니다!")
+            return false
+        }
+
+        // 항복비 계산
+        val surrenderCost = calculateSurrenderCost(nationName)
+
+        // Vault 연동하여 국가 금고에서 차감 (추후 구현 가능)
+        // 현재는 플레이어에게서 차감
+        val economy = plugin.server.servicesManager.getRegistration(net.milkbowl.vault.economy.Economy::class.java)?.provider
+
+        if (economy != null && economy.has(player, surrenderCost)) {
+            economy.withdrawPlayer(player, surrenderCost)
+
+            surrenderedNations.add(nationName)
+
+            broadcastComponent(
+                Component.text("${plugin.configManager.getColoredNationName(nationName)} 국가가 항복했습니다!", NamedTextColor.YELLOW)
+            )
+            broadcastComponent(
+                Component.text("항복비: $${String.format("%,.0f", surrenderCost)}", NamedTextColor.GOLD)
+            )
+
+            // 남은 국가가 1개면 전쟁 종료
+            checkWarEndCondition()
+
+            return true
+        } else {
+            player.sendMessage("§c항복 비용이 부족합니다! (필요: $${String.format("%,.0f", surrenderCost)})")
+            return false
+        }
+    }
+
+    /**
+     * 항복비 계산
+     */
+    private fun calculateSurrenderCost(nationName: String): Double {
+        val baseCost = plugin.configManager.getSurrenderBaseCost()
+        val stats = warStats[nationName] ?: NationWarStats()
+
+        // 잃은 영토 1개당 감소 비율
+        val lostTerritoryDiscount = plugin.configManager.getSurrenderLostTerritoryDiscount()
+
+        // 획득한 영토 1개당 증가 비율
+        val gainedTerritoryPenalty = plugin.configManager.getSurrenderGainedTerritoryPenalty()
+
+        val lostDiscount = stats.territoriesLost * lostTerritoryDiscount
+        val gainedPenalty = stats.territoriesGained * gainedTerritoryPenalty
+
+        val finalCost = baseCost * (1.0 - lostDiscount + gainedPenalty)
+
+        return maxOf(0.0, finalCost) // 최소 0
+    }
+
+    /**
+     * 전쟁 종료 조건 확인
+     */
+    private fun checkWarEndCondition() {
+        // warStats에 있는 팀들 중 항복하지 않은 팀 확인
+        val remainingTeams = warStats.keys.filter { !surrenderedNations.contains(it) }
+
+        if (remainingTeams.size <= 1) {
+            // 1개 국가만 남음 = 즉시 종료
+            broadcastComponent(
+                Component.text("모든 국가가 항복했습니다! 전쟁을 조기 종료합니다!", NamedTextColor.GREEN)
+            )
+            endGlobalWar(true)
+        }
+    }
+
+    /**
+     * 전쟁 보상 분배
+     */
+    private fun distributeWarRewards() {
+        // warStats에 있는 팀들 중 항복하지 않은 팀
+        val remainingTeams = warStats.keys.filter { !surrenderedNations.contains(it) }.toList()
+
+        // 총 항복비 계산
+        val totalSurrenderMoney = surrenderedNations.sumOf { calculateSurrenderCost(it) }
+
+        if (remainingTeams.size == 1) {
+            // 1개 승전국만 남음 = 모든 항복비 독식
+            val winner = remainingTeams[0]
+            broadcastComponent(
+                Component.text("🏆 승전국: ${plugin.configManager.getColoredNationName(winner)}", NamedTextColor.GOLD)
+            )
+            broadcastComponent(
+                Component.text("획득 항복비: $${String.format("%,.0f", totalSurrenderMoney)}", NamedTextColor.GOLD)
+            )
+
+            // 승전국 온라인 플레이어들에게 분배
+            distributeToTeam(winner, totalSurrenderMoney)
+
+        } else if (remainingTeams.size > 1) {
+            // 시간 종료 - 스코어 기반 분배
+            val scores = calculateCurrentWarScore()
+
+            // 남은 팀들의 스코어만 추출
+            val remainingScores = remainingTeams.associateWith { scores[it] ?: 0.0 }
+            val maxScore = remainingScores.values.maxOrNull() ?: 0.0
+
+            // 최고 점수 팀들 찾기
+            val winners = remainingScores.filter { it.value == maxScore }.keys.toList()
+
+            if (winners.size == 1) {
+                // 1등이 1개 팀 = 독식
+                val winner = winners[0]
+                broadcastComponent(
+                    Component.text("🏆 1위 승전국: ${plugin.configManager.getColoredNationName(winner)}", NamedTextColor.GOLD)
+                )
+                broadcastComponent(
+                    Component.text("최종 점수: %.1f점".format(maxScore), NamedTextColor.YELLOW)
+                )
+                broadcastComponent(
+                    Component.text("획득 항복비: $${String.format("%,.0f", totalSurrenderMoney)}", NamedTextColor.GOLD)
+                )
+
+                distributeToTeam(winner, totalSurrenderMoney)
+
+            } else {
+                // 동점자 여러 명 = 균등 분배
+                val perTeam = totalSurrenderMoney / winners.size
+
+                broadcastComponent(
+                    Component.text("⚖ 동점! 최고 점수: %.1f점".format(maxScore), NamedTextColor.YELLOW)
+                )
+                broadcastComponent(
+                    Component.text("항복비 균등 분배 (${winners.size}개 국가)", NamedTextColor.YELLOW)
+                )
+
+                winners.forEach { luckPermsGroup ->
+                    broadcastComponent(
+                        Component.text("${plugin.configManager.getColoredNationName(luckPermsGroup)}: $${String.format("%,.0f", perTeam)}", NamedTextColor.GOLD)
+                    )
+                    distributeToTeam(luckPermsGroup, perTeam)
+                }
+            }
+        }
+    }
+
+    /**
+     * 팀에게 돈 분배
+     */
+    private fun distributeToTeam(teamId: String, totalMoney: Double) {
+        val luckPermsGroup = plugin.configManager.getTeamLuckPermsGroup(teamId) ?: return
+        val onlineMembers = Bukkit.getOnlinePlayers().filter {
+            kr.skarch.territory_Plugin.utils.PlayerGroupCache.getPlayerGroup(it) == luckPermsGroup
+        }
+
+        if (onlineMembers.isEmpty()) return
+
+        val perPlayer = totalMoney / onlineMembers.size
+        val economy = plugin.server.servicesManager.getRegistration(net.milkbowl.vault.economy.Economy::class.java)?.provider
+
+        onlineMembers.forEach { player ->
+            economy?.depositPlayer(player, perPlayer)
+            player.sendMessage("§a전쟁 보상: §6$${String.format("%,.0f", perPlayer)}")
+        }
+    }
+
+    /**
+     * 전쟁 결과 발표
+     */
+    private fun announceWarResults() {
+        broadcastComponent(
+            Component.text("=== 제 ${globalWarNumber}차 글로벌 전쟁 결과 ===", NamedTextColor.GOLD)
+        )
+
+        // 스코어 계산 및 순위 정렬
+        val scores = calculateCurrentWarScore()
+        val allScores = warStats.keys.associateWith { nationName ->
+            if (surrenderedNations.contains(nationName)) {
+                -999.0 // 항복한 국가는 최하위
+            } else {
+                scores[nationName] ?: 0.0
+            }
+        }
+        val sortedByScore = allScores.entries.sortedByDescending { it.value }
+
+        broadcastComponent(Component.text(""))
+        broadcastComponent(Component.text("§6📊 최종 순위:", NamedTextColor.GOLD))
+
+        sortedByScore.forEachIndexed { index, entry ->
+            val nationName = entry.key
+            val score = entry.value
+            val stats = warStats[nationName] ?: return@forEachIndexed
+            val displayName = plugin.configManager.getColoredNationName(nationName)
+            val status = if (surrenderedNations.contains(nationName)) "§c항복" else "§a생존"
+
+            val medal = when(index) {
+                0 -> "§6🥇"
+                1 -> "§7🥈"
+                2 -> "§c🥉"
+                else -> "§e${index + 1}."
+            }
+
+            broadcastComponent(
+                Component.text("$medal $displayName - $status")
+            )
+
+            if (score > -999) {
+                broadcastComponent(
+                    Component.text("  §7점수: §e%.1f§7점 | 점령석: §a${stats.stonesDestroyed}§7/§c${stats.stonesLost} §7| 영토: §a${stats.territoriesGained}§7/§c${stats.territoriesLost}".format(score))
+                )
+            } else {
+                broadcastComponent(
+                    Component.text("  §7점령석: §a${stats.stonesDestroyed}§7/§c${stats.stonesLost} §7| 영토: §a${stats.territoriesGained}§7/§c${stats.territoriesLost}")
+                )
+            }
+        }
+    }
+
+    /**
+     * 영토 점령 기록
+     */
+    fun recordTerritoryConquest(attackerNation: String, defenderNation: String, territoryCount: Int) {
+        if (!globalWarActive) return
+
+        warStats.computeIfAbsent(attackerNation) { NationWarStats() }.territoriesGained += territoryCount
+        warStats.computeIfAbsent(defenderNation) { NationWarStats() }.territoriesLost += territoryCount
+    }
+
+    /**
+     * 점령석 파괴 기록
+     */
+    fun recordStoneDestruction(attackerNation: String, defenderNation: String) {
+        if (!globalWarActive) return
+
+        warStats.computeIfAbsent(attackerNation) { NationWarStats() }.stonesDestroyed++
+        warStats.computeIfAbsent(defenderNation) { NationWarStats() }.stonesLost++
+    }
+
+    /**
+     * 글로벌 전쟁 상태 확인
+     */
+    fun isGlobalWarActive(): Boolean = globalWarActive
+
+    /**
+     * 전쟁 중인지 확인 (하위 호환성)
+     */
+    fun isInGlobalWar(nationName: String): Boolean = globalWarActive && !surrenderedNations.contains(nationName)
+
+    /**
+     * 전투 가능 여부
+     */
+    fun canEngage(nation1: String, nation2: String): Boolean {
+        return globalWarActive &&
+               !surrenderedNations.contains(nation1) &&
+               !surrenderedNations.contains(nation2)
+    }
+
+    /**
+     * 관리자 명령어: 전쟁 강제 종료
+     */
+    fun forceEndWar() {
+        if (globalWarActive) {
+            endGlobalWar(true)
+        }
+    }
+
+    /**
+     * 관리자 명령어: 전쟁 즉시 시작
+     */
+    fun startWarImmediately() {
+        preparationTask?.cancel()
+        preparationTask = null
+        startGlobalWar()
+    }
+
+    /**
+     * 현재 전쟁의 실시간 스코어 계산
+     * 공식: (점령 - 잃음) + (킬 - 데스) / 2
+     */
+    fun calculateCurrentWarScore(): Map<String, Double> {
+        if (!globalWarActive) return emptyMap()
+
+        val scores = mutableMapOf<String, Double>()
+
+        warStats.forEach { (nationName, stats) ->
+            // (점령한 점령석 - 잃은 점령석) + (킬 - 데스) / 2
+            val stoneScore = stats.stonesDestroyed - stats.stonesLost
+            val combatScore = (stats.territoriesGained - stats.territoriesLost) / 2.0
+            val totalScore = stoneScore + combatScore
+
+            scores[nationName] = totalScore
+        }
+
+        return scores.filter { !surrenderedNations.contains(it.key) } // 항복한 국가 제외
+    }
+
+    /**
+     * 전쟁 통계 조회
+     */
+    fun getWarStats(nationName: String): NationWarStats? {
+        return warStats[nationName]
+    }
+
+    /**
+     * 특정 국가가 항복했는지 확인
+     */
+    fun hasSurrendered(nationName: String): Boolean {
+        return surrenderedNations.contains(nationName)
+    }
+
+    /**
+     * Adventure Component 브로드캐스트
      */
     private fun broadcastComponent(component: Component) {
         Bukkit.getServer().sendMessage(component)
-    }
-
-    /**
-     * Execute console commands on war declaration
-     */
-    private fun executeDeclarationCommands(nationName: String) {
-        val commands = plugin.configManager.config.getStringList("war.declaration-commands")
-        commands.forEach { cmd ->
-            val finalCmd = cmd.replace("{team}", nationName)
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCmd)
-        }
-    }
-
-    /**
-     * Get remaining time until war starts (in seconds)
-     * Returns null if not in preparation
-     */
-    fun getWarTimeLeft(nationName: String): Int? {
-        return pendingWars[nationName]?.timeLeft
-    }
-
-    /**
-     * Check if a nation is currently in global war
-     */
-    fun isInGlobalWar(nationName: String): Boolean {
-        return plugin.databaseManager.isInGlobalWar(nationName)
-    }
-
-    /**
-     * End global war for a nation
-     */
-    fun endGlobalWar(nationName: String, stonesDestroyed: Int = 0, chunksConquered: Int = 0) {
-        // Cancel pending war if exists
-        pendingWars[nationName]?.task?.cancel()
-        pendingWars.remove(nationName)
-
-        val coloredNation = plugin.configManager.getColoredNationName(nationName)
-        plugin.databaseManager.setWarState(nationName, false)
-        plugin.databaseManager.logWarEnd(nationName, stonesDestroyed, chunksConquered)
-
-        // 쿨타임 설정
-        plugin.databaseManager.setWarCooldown(nationName)
-
-        broadcastComponent(
-            Component.text("✓ ", NamedTextColor.GREEN)
-                .append(Component.text(coloredNation))
-                .append(Component.text("의 전쟁이 종료되었습니다.", NamedTextColor.GREEN))
-        )
-
-        // 전쟁 보상 지급
-        if (plugin.configManager.isWarRewardsEnabled()) {
-            distributeWarRewards()
-        }
-    }
-
-    /**
-     * Check if two nations can engage in combat
-     * Returns true if either nation is in global war
-     */
-    fun canEngage(nation1: String, nation2: String): Boolean {
-        return isInGlobalWar(nation1) || isInGlobalWar(nation2)
-    }
-
-    /**
-     * Cancel a pending war declaration
-     */
-    fun cancelPendingWar(nationName: String): Boolean {
-        val countdown = pendingWars.remove(nationName)
-        if (countdown != null) {
-            countdown.task.cancel()
-            val coloredNation = plugin.configManager.getColoredNationName(nationName)
-            broadcastComponent(
-                Component.text("✓ ", NamedTextColor.GREEN)
-                    .append(Component.text(coloredNation))
-                    .append(Component.text("의 전쟁 선포가 취소되었습니다.", NamedTextColor.GREEN))
-            )
-            return true
-        }
-        return false
-    }
-
-    /**
-     * Check if a nation has a pending war declaration
-     */
-    fun hasPendingWar(nationName: String): Boolean {
-        return pendingWars.containsKey(nationName)
-    }
-
-    /**
-     * Start war immediately without countdown (admin command)
-     */
-    fun startWarImmediately(nationName: String) {
-        // Cancel any pending countdown
-        pendingWars[nationName]?.task?.cancel()
-        pendingWars.remove(nationName)
-
-        // Start war immediately
-        val warNumber = plugin.databaseManager.getNextWarNumber()
-        plugin.databaseManager.setWarState(nationName, true, warNumber)
-        plugin.databaseManager.logWarStart(nationName, "GLOBAL", warNumber)
-
-        val coloredNation = plugin.configManager.getColoredNationName(nationName)
-        // Broadcast with war number using Adventure API
-        broadcastComponent(
-            Component.text("⚔⚔⚔ 제 ", NamedTextColor.DARK_RED)
-                .append(Component.text("${warNumber}", NamedTextColor.WHITE))
-                .append(Component.text("차 전쟁 시작! ", NamedTextColor.DARK_RED))
-                .append(Component.text(coloredNation))
-                .append(Component.text("이(가) 전 세계와 전쟁을 시작했습니다! ⚔⚔⚔", NamedTextColor.DARK_RED))
-        )
-
-        // Execute declaration commands
-        executeDeclarationCommands(nationName)
-    }
-
-    /**
-     * Get all nations currently in war
-     */
-    fun getActiveWars(): List<String> {
-        return plugin.databaseManager.getActiveWarNations()
-    }
-
-    /**
-     * Calculate current war score for all nations
-     * New formula: (conquests - lost) + round((kills - deaths) / 2.0)
-     */
-    fun calculateCurrentWarScore(): Map<String, Int> {
-        val scores = mutableMapOf<String, Int>()
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-
-        // Get all teams
-        plugin.configManager.getTeamIds().forEach { teamId ->
-            val teamGroup = plugin.configManager.getTeamLuckPermsGroup(teamId)
-
-            // Get conquest count (점령한 다른 나라 땅 개수)
-            val conquests = plugin.databaseManager.getWarConquestCount(teamGroup, currentWarNumber)
-
-            // Get lost count (점령당한 점령석 갯수)
-            val lost = plugin.databaseManager.getWarLostCount(teamGroup, currentWarNumber)
-
-            // Get kill and death count
-            val kills = plugin.databaseManager.getWarKillCount(teamGroup, currentWarNumber)
-            val deaths = plugin.databaseManager.getWarDeathCount(teamGroup, currentWarNumber)
-
-            // Calculate score using new formula with HALF_UP rounding
-            val stoneScore = conquests - lost
-            val combatScore = BigDecimal((kills - deaths) / 2.0)
-                .setScale(0, RoundingMode.HALF_UP)
-                .toInt()
-            val score = stoneScore + combatScore
-
-            if (score > 0) {
-                scores[teamGroup] = score
-            }
-        }
-
-        return scores
-    }
-
-    /**
-     * Get conquest count for a nation in current war
-     */
-    fun getConquestCount(nationName: String): Int {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        return plugin.databaseManager.getWarConquestCount(nationName, currentWarNumber)
-    }
-
-    /**
-     * Get kill count for a nation in current war
-     */
-    fun getKillCount(nationName: String): Int {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        return plugin.databaseManager.getWarKillCount(nationName, currentWarNumber)
-    }
-
-    /**
-     * Record a conquest (when occupation stone is destroyed)
-     */
-    fun recordConquest(nationName: String) {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        plugin.databaseManager.incrementWarConquest(nationName, currentWarNumber)
-    }
-
-    /**
-     * Record a kill
-     */
-    fun recordKill(killerNation: String) {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        plugin.databaseManager.incrementWarKill(killerNation, currentWarNumber)
-    }
-
-    /**
-     * Record that a nation's stone was destroyed (increment lost)
-     */
-    fun recordLost(nationName: String) {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        // Only record if a war is active
-        if (currentWarNumber <= 0) return
-        plugin.databaseManager.incrementWarLost(nationName, currentWarNumber)
-    }
-
-    /**
-     * Record that a nation's player died (increment deaths)
-     */
-    fun recordDeath(nationName: String) {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        if (currentWarNumber <= 0) return
-        plugin.databaseManager.incrementWarDeath(nationName, currentWarNumber)
-    }
-
-    /**
-     * Apply buffs to attacking nation players
-     */
-    private fun applyAttackerBuffs(nationName: String) {
-        if (!plugin.configManager.isAttackerBuffsEnabled()) return
-
-        val duration = plugin.configManager.getAttackerBuffsDuration() * 20 // Convert to ticks
-        val effects = plugin.configManager.getAttackerBuffEffects()
-        val coloredNation = plugin.configManager.getColoredNationName(nationName)
-
-        Bukkit.getOnlinePlayers().forEach { player ->
-            val playerGroup = kr.skarch.territory_Plugin.utils.PlayerGroupCache.getPlayerGroup(player)
-            if (playerGroup == nationName) {
-                effects.forEach { effectStr ->
-                    val parts = effectStr.split(":")
-                    if (parts.size == 2) {
-                        try {
-                            val effectType = org.bukkit.potion.PotionEffectType.getByName(parts[0])
-                            val amplifier = parts[1].toInt() - 1 // Minecraft uses 0-based amplifier
-                            if (effectType != null) {
-                                player.addPotionEffect(
-                                    org.bukkit.potion.PotionEffect(effectType, duration, amplifier)
-                                )
-                            }
-                        } catch (e: Exception) {
-                            plugin.logger.warning("Invalid effect format: $effectStr")
-                        }
-                    }
-                }
-            }
-        }
-
-        if (plugin.configManager.isAttackerBuffsBroadcast()) {
-            broadcastComponent(
-                Component.text("⚡ ", NamedTextColor.GOLD)
-                    .append(Component.text(coloredNation))
-                    .append(Component.text(" 국가의 전사들이 전쟁 버프를 받았습니다! (${plugin.configManager.getAttackerBuffsDuration() / 60}분)", NamedTextColor.YELLOW))
-            )
-        }
-    }
-
-    /**
-     * Distribute war rewards to winner and participants
-     */
-    private fun distributeWarRewards() {
-        val currentWarNumber = plugin.databaseManager.getCurrentWarNumber()
-        val scores = calculateCurrentWarScore()
-
-        if (scores.isEmpty()) return
-
-        // 1. 승리 보상
-        val winner = scores.maxByOrNull { it.value }?.key
-        if (winner != null) {
-            distributeVictoryReward(winner)
-        }
-
-        // 2. MVP 보상
-        if (plugin.configManager.isMvpRewardEnabled()) {
-            distributeMvpReward(currentWarNumber)
-        }
-    }
-
-    /**
-     * Distribute victory reward to winning nation
-     */
-    private fun distributeVictoryReward(winnerNation: String) {
-        val money = plugin.configManager.getVictoryRewardMoney()
-        val items = plugin.configManager.getVictoryRewardItems()
-        val coloredNation = plugin.configManager.getColoredNationName(winnerNation)
-
-        broadcastComponent(
-            Component.text("🏆 ", NamedTextColor.GOLD)
-                .append(Component.text(coloredNation))
-                .append(Component.text(" 국가가 전쟁에서 승리했습니다!", NamedTextColor.YELLOW))
-        )
-
-        Bukkit.getOnlinePlayers().forEach { player ->
-            val playerGroup = kr.skarch.territory_Plugin.utils.PlayerGroupCache.getPlayerGroup(player)
-            if (playerGroup == winnerNation) {
-                // Give money
-                if (money > 0 && plugin.server.pluginManager.getPlugin("Vault") != null) {
-                    val economy = plugin.server.servicesManager.getRegistration(
-                        net.milkbowl.vault.economy.Economy::class.java
-                    )?.provider
-                    economy?.depositPlayer(player, money)
-                }
-
-                // Give items
-                items.forEach { itemStr ->
-                    val parts = itemStr.split(":")
-                    if (parts.size == 2) {
-                        try {
-                            val material = org.bukkit.Material.valueOf(parts[0].uppercase())
-                            val amount = parts[1].toInt()
-                            val itemStack = org.bukkit.inventory.ItemStack(material, amount)
-                            player.inventory.addItem(itemStack)
-                        } catch (e: Exception) {
-                            plugin.logger.warning("Invalid item format: $itemStr")
-                        }
-                    }
-                }
-
-                player.sendMessage("§a§l[승리 보상] §e${money}원과 아이템을 받았습니다!")
-            }
-        }
-
-        // Execute victory commands
-        val commands = plugin.configManager.getVictoryRewardCommands()
-        commands.forEach { cmd ->
-            val finalCmd = cmd.replace("{winner}", winnerNation)
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCmd)
-        }
-    }
-
-    /**
-     * Distribute MVP reward to top killer or conqueror
-     */
-    private fun distributeMvpReward(warNumber: Int) {
-        val mvpMoney = plugin.configManager.getMvpRewardMoney()
-        val mvpItems = plugin.configManager.getMvpRewardItems()
-
-        // Find MVP (most kills + conquests)
-        var mvpPlayer: org.bukkit.entity.Player? = null
-        var maxScore = 0
-
-        Bukkit.getOnlinePlayers().forEach { player ->
-            val playerGroup = kr.skarch.territory_Plugin.utils.PlayerGroupCache.getPlayerGroup(player)
-            val kills = plugin.databaseManager.getWarKillCount(playerGroup, warNumber)
-            val conquests = plugin.databaseManager.getWarConquestCount(playerGroup, warNumber)
-            val score = kills + (conquests * 5) // 점령석은 킬의 5배 가치
-
-            if (score > maxScore) {
-                maxScore = score
-                mvpPlayer = player
-            }
-        }
-
-        mvpPlayer?.let { player ->
-            broadcastComponent(
-                Component.text("⭐ MVP: ", NamedTextColor.GOLD)
-                    .append(Component.text(player.name, NamedTextColor.YELLOW))
-                    .append(Component.text("님이 전쟁에서 가장 많은 공헌을 했습니다!", NamedTextColor.GOLD))
-            )
-
-            // Give money
-            if (mvpMoney > 0 && plugin.server.pluginManager.getPlugin("Vault") != null) {
-                val economy = plugin.server.servicesManager.getRegistration(
-                    net.milkbowl.vault.economy.Economy::class.java
-                )?.provider
-                economy?.depositPlayer(player, mvpMoney)
-            }
-
-            // Give items
-            mvpItems.forEach { itemStr ->
-                val parts = itemStr.split(":")
-                if (parts.size == 2) {
-                    try {
-                        val material = org.bukkit.Material.valueOf(parts[0].uppercase())
-                        val amount = parts[1].toInt()
-                        val itemStack = org.bukkit.inventory.ItemStack(material, amount)
-                        player.inventory.addItem(itemStack)
-                    } catch (e: Exception) {
-                        plugin.logger.warning("Invalid MVP item format: $itemStr")
-                    }
-                }
-            }
-
-            player.sendMessage("§6§l[MVP 보상] §e${mvpMoney}원과 특별 아이템을 받았습니다!")
-        }
-    }
-
-    /**
-     * Check if nation can declare war (cooldown check)
-     */
-    fun canDeclareWar(nationName: String): Pair<Boolean, Long> {
-        val cooldown = plugin.configManager.getWarDeclarationCooldown()
-        val remaining = plugin.databaseManager.getRemainingCooldown(nationName, cooldown)
-        return Pair(remaining == 0L, remaining)
     }
 }

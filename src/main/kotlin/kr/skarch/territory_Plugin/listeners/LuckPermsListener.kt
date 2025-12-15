@@ -26,7 +26,6 @@ class LuckPermsListener(private val plugin: Territory_Plugin, private val luckPe
                 val userId = (event.target as? net.luckperms.api.model.user.User)?.uniqueId
                 if (userId != null) {
                     PlayerGroupCache.invalidate(userId)
-                    plugin.logger.info("Invalidated group cache for user $userId (group added)")
                 }
             }
         }.also { subscriptions.add(it) }
@@ -36,7 +35,6 @@ class LuckPermsListener(private val plugin: Territory_Plugin, private val luckPe
                 val userId = (event.target as? net.luckperms.api.model.user.User)?.uniqueId
                 if (userId != null) {
                     PlayerGroupCache.invalidate(userId)
-                    plugin.logger.info("Invalidated group cache for user $userId (group removed)")
                 }
             }
         }.also { subscriptions.add(it) }
@@ -44,15 +42,11 @@ class LuckPermsListener(private val plugin: Territory_Plugin, private val luckPe
         // Listen for data recalculation
         eventBus.subscribe(plugin, UserDataRecalculateEvent::class.java) { event ->
             PlayerGroupCache.invalidate(event.user.uniqueId)
-            plugin.logger.info("Invalidated group cache for user ${event.user.uniqueId} (data recalculated)")
         }.also { subscriptions.add(it) }
-
-        plugin.logger.info("LuckPerms event listeners registered successfully")
     }
 
     fun unregister() {
         subscriptions.forEach { it.close() }
         subscriptions.clear()
-        plugin.logger.info("LuckPerms event listeners unregistered")
     }
 }

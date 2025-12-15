@@ -19,12 +19,10 @@ class ItemManager(private val plugin: Territory_Plugin) {
             plugin.saveResource("items.yml", false)
         }
         items = YamlConfiguration.loadConfiguration(itemsFile)
-        plugin.logger.info("아이템 설정 로드 완료")
     }
 
     fun reload() {
         items = YamlConfiguration.loadConfiguration(itemsFile)
-        plugin.logger.info("아이템 설정 리로드 완료")
     }
 
     /**

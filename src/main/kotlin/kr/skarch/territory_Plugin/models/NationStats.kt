@@ -20,6 +20,7 @@ data class NationStats(
         var score = totalChunks * 10
         score += totalStones * 50
         score += when (highestTier) {
+            StoneTier.OUTPOST -> 0      // 전초기지는 점수 없음
             StoneTier.TIER_1 -> 0
             StoneTier.TIER_2 -> 100
             StoneTier.TIER_3 -> 300

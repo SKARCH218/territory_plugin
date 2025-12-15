@@ -37,17 +37,9 @@ class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : Plac
                 if (plugin.warManager.isInGlobalWar(team)) "예" else "아니오"
             }
 
-            // 플레이어 국가의 전쟁 남은 시간 (초)
-            "team_war_time_left" -> {
-                val team = getPlayerTeam(player)
-                plugin.warManager.getWarTimeLeft(team)?.toString() ?: "0"
-            }
-
-            // 플레이어 국가의 전쟁 남은 시간 (포맷: MM:SS)
-            "team_war_time_left_formatted" -> {
-                val team = getPlayerTeam(player)
-                val timeLeft = plugin.warManager.getWarTimeLeft(team) ?: 0
-                formatTime(timeLeft)
+            // 글로벌 전쟁 상태
+            "global_war_active" -> {
+                if (plugin.warManager.isGlobalWarActive()) "예" else "아니오"
             }
 
             // 현재 위치 청크 소유자
@@ -83,16 +75,6 @@ class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : Plac
                 if (plugin.warManager.isInGlobalWar(teamName)) "전쟁 중" else "평화"
             }
 
-            // 특정 팀의 전쟁 준비 시간: %territory_warprep_<팀명>%
-            params.startsWith("warprep_") -> {
-                val teamName = params.substring(8)
-                val timeLeft = plugin.warManager.getWarTimeLeft(teamName)
-                if (timeLeft != null && timeLeft > 0) {
-                    formatTime(timeLeft)
-                } else {
-                    "없음"
-                }
-            }
 
             // 전체 팀 수
             params == "total_teams" -> {

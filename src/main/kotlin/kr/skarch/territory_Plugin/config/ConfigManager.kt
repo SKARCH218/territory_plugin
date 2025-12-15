@@ -33,13 +33,13 @@ class ConfigManager(private val plugin: Territory_Plugin) {
         }
         teamConfig = YamlConfiguration.loadConfiguration(teamFile)
 
-        plugin.logger.info("설정 파일 로드 완료")
+        // 로그 제거 (불필요)
     }
 
     fun reload() {
         config = YamlConfiguration.loadConfiguration(configFile)
         teamConfig = YamlConfiguration.loadConfiguration(teamFile)
-        plugin.logger.info("설정 파일 리로드 완료")
+        // 로그 제거 (불필요)
     }
 
     // ===== Config.yml 설정값 가져오기 =====
@@ -63,6 +63,14 @@ class ConfigManager(private val plugin: Territory_Plugin) {
      */
     fun getWarPreparationTime(): Int {
         return config.getInt("war.preparation-time", 600)
+    }
+
+    /**
+     * 전쟁 지속 시간 (초) - NEW!
+     * 기본값: 3600초 (1시간)
+     */
+    fun getWarDuration(): Int {
+        return config.getInt("war.duration", 3600)
     }
 
     /**
@@ -98,6 +106,30 @@ class ConfigManager(private val plugin: Territory_Plugin) {
      */
     fun getWarDeclarationCooldown(): Long {
         return config.getLong("war.declaration-cooldown", 7200L)
+    }
+
+    /**
+     * 항복 기본 비용 - NEW!
+     * 기본값: 100000.0
+     */
+    fun getSurrenderBaseCost(): Double {
+        return config.getDouble("war.surrender.base-cost", 100000.0)
+    }
+
+    /**
+     * 잃은 영토 1개당 항복비 감소 비율 - NEW!
+     * 기본값: 0.05 (5%)
+     */
+    fun getSurrenderLostTerritoryDiscount(): Double {
+        return config.getDouble("war.surrender.lost-territory-discount", 0.05)
+    }
+
+    /**
+     * 획득한 영토 1개당 항복비 증가 비율 - NEW!
+     * 기본값: 0.1 (10%)
+     */
+    fun getSurrenderGainedTerritoryPenalty(): Double {
+        return config.getDouble("war.surrender.gained-territory-penalty", 0.1)
     }
 
     /**
@@ -426,6 +458,13 @@ class ConfigManager(private val plugin: Territory_Plugin) {
      */
     fun teamExists(teamId: String): Boolean {
         return getTeamIds().contains(teamId)
+    }
+
+    /**
+     * 모든 팀 ID 목록 가져오기
+     */
+    fun getAllTeamIds(): List<String> {
+        return getTeamIds().toList()
     }
 
     /**

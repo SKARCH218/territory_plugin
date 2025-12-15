@@ -19,12 +19,10 @@ class LangManager(private val plugin: Territory_Plugin) {
             plugin.saveResource("lang.yml", false)
         }
         lang = YamlConfiguration.loadConfiguration(langFile)
-        plugin.logger.info("언어 파일 로드 완료")
     }
 
     fun reload() {
         lang = YamlConfiguration.loadConfiguration(langFile)
-        plugin.logger.info("언어 파일 리로드 완료")
     }
 
     /**

@@ -34,6 +34,7 @@ class Territory_Plugin : JavaPlugin() {
     lateinit var statsManager: StatsManager
     lateinit var stoneAbilityManager: StoneAbilityManager
     lateinit var lordManager: LordManager
+    lateinit var territoryAPI: kr.skarch.territory_Plugin.api.TerritoryAPI
     private var luckPermsListener: LuckPermsListener? = null
 
     // 점령석 설치 대기 중인 플레이어들 (UUID -> PendingStone)
@@ -45,7 +46,6 @@ class Territory_Plugin : JavaPlugin() {
         // Initialize configuration
         configManager = ConfigManager(this)
         configManager.initialize()
-        logger.info("설정 파일 로드 완료")
 
         // Initialize language
         langManager = LangManager(this)
@@ -58,7 +58,6 @@ class Territory_Plugin : JavaPlugin() {
         // Initialize database
         databaseManager = DatabaseManager(this)
         databaseManager.initialize()
-        logger.info("데이터베이스 초기화 완료")
 
         // Initialize managers
         territoryManager = TerritoryManager(this)
@@ -67,11 +66,10 @@ class Territory_Plugin : JavaPlugin() {
         statsManager = StatsManager(this)
         stoneAbilityManager = StoneAbilityManager(this)
         lordManager = LordManager(this)
-        logger.info("관리자 시스템 초기화 완료")
+        territoryAPI = kr.skarch.territory_Plugin.api.TerritoryAPI(this)
 
         // Initialize PlayerGroupCache with config values
         PlayerGroupCache.initialize(this)
-        logger.info("플레이어 그룹 캐시 초기화 완료")
 
         // Initialize StoneAbilityManager
         stoneAbilityManager.initialize()
@@ -83,18 +81,15 @@ class Territory_Plugin : JavaPlugin() {
         server.pluginManager.registerEvents(warDeclarationListener, this)
         server.pluginManager.registerEvents(kr.skarch.territory_Plugin.listeners.RegionNameInputListener(this), this)
         server.pluginManager.registerEvents(CombatListener(this), this)
-        logger.info("이벤트 리스너 등록 완료")
 
         // Register commands
         getCommand("territory")?.setExecutor(TerritoryCommand(this))
         getCommand("territory")?.tabCompleter = TerritoryTabCompleter(this)
         getCommand("war-confirm")?.setExecutor(WarConfirmCommand(this, warDeclarationListener))
-        logger.info("명령어 등록 완료")
 
         // Register PlaceholderAPI expansion
         if (server.pluginManager.getPlugin("PlaceholderAPI") != null) {
             kr.skarch.territory_Plugin.integrations.TerritoryPlaceholderExpansion(this).register()
-            logger.info("PlaceholderAPI 확장 등록 완료")
         }
 
         // Register LuckPerms event listener for cache invalidation
@@ -102,7 +97,6 @@ class Territory_Plugin : JavaPlugin() {
             val luckPerms = LuckPermsProvider.get()
             luckPermsListener = LuckPermsListener(this, luckPerms)
             luckPermsListener?.register()
-            logger.info("LuckPerms 이벤트 리스너 등록 완료")
         } catch (e: Exception) {
             logger.warning("LuckPerms를 찾을 수 없습니다. 그룹 캐시 자동 무효화가 비활성화됩니다.")
         }

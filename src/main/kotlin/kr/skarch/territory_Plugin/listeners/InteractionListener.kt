@@ -54,16 +54,10 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
                     val verifyStone = findStoneAtLocation(block.location)
                     if (verifyStone != null && verifyStone.stoneUuid == stone.stoneUuid) {
                         // Destroy the stone (this removes all 8 blocks and transfers territory)
+                        // TerritoryManager.destroyStone()에서 전쟁 통계 자동 기록됨
                         plugin.territoryManager.destroyStone(stone, playerGroup)
                         player.sendMessage("§a점령석을 파괴하고 영토를 점령했습니다!")
 
-                        // Record conquest if in war
-                        if (plugin.warManager.isInGlobalWar(playerGroup) ||
-                            plugin.warManager.isInGlobalWar(stone.ownerGroup)) {
-                            plugin.warManager.recordConquest(playerGroup)
-                            // 기록: 피해국의 잃은 점령석 수 증가
-                            plugin.warManager.recordLost(stone.ownerGroup)
-                        }
 
                         // Play break effect
                         block.world.createExplosion(block.location, 0f, false, false)
@@ -147,12 +141,12 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
         // 점령석 아이템 체크
         if (item.type != Material.PAPER) return
         val meta = item.itemMeta ?: return
-
+        // 일반 점령석 체크
         val itemName = plugin.langManager.getItemName("occupation_stone")
-        // Check if item has display name and it matches
-        if (!meta.hasDisplayName()) return
-        @Suppress("DEPRECATION")
-        if (meta.displayName != itemName) return
+        val isOutpost = meta.hasDisplayName() && meta.displayName.contains("전초기지")
+        val isNormalStone = meta.hasDisplayName() && meta.displayName == itemName
+
+        if (!isNormalStone && !isOutpost) return
 
         // 이벤트 취소
         event.isCancelled = true
@@ -187,14 +181,23 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
         }
 
         // 지역 이름 입력 요청
-        player.sendMessage("§6===========================================")
-        player.sendMessage("§a§l점령석 설치")
-        player.sendMessage("§e이 영토의 이름을 채팅창에 입력하세요.")
-        player.sendMessage("§7(예: 중앙기지, 북부요새, 동쪽광산 등)")
-        player.sendMessage("§6===========================================")
+        if (isOutpost) {
+            player.sendMessage("§6===========================================")
+            player.sendMessage("§a§l전초기지 설치")
+            player.sendMessage("§e이 전초기지의 이름을 채팅창에 입력하세요.")
+            player.sendMessage("§7(예: 북부전초기지, 동쪽감시초소 등)")
+            player.sendMessage("§c주의: 1청크만 점령되며 업그레이드 불가!")
+            player.sendMessage("§6===========================================")
+        } else {
+            player.sendMessage("§6===========================================")
+            player.sendMessage("§a§l점령석 설치")
+            player.sendMessage("§e이 영토의 이름을 채팅창에 입력하세요.")
+            player.sendMessage("§7(예: 중앙기지, 북부요새, 동쪽광산 등)")
+            player.sendMessage("§6===========================================")
+        }
 
         // 대기 중인 플레이어 저장 (플러그인에 Map 저장)
-        plugin.pendingRegionNames[player.uniqueId] = PendingStone(location, playerGroup, item)
+        plugin.pendingRegionNames[player.uniqueId] = PendingStone(location, playerGroup, item, isOutpost)
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -255,14 +258,8 @@ class InteractionListener(private val plugin: Territory_Plugin) : Listener {
         val victimGroup = getPlayerGroup(victim)
 
         // Record kill if in war and different nations
-        if (killerGroup != victimGroup) {
-            if (plugin.warManager.isInGlobalWar(killerGroup) ||
-                plugin.warManager.isInGlobalWar(victimGroup)) {
-                plugin.warManager.recordKill(killerGroup)
-                // 기록: 피해국의 죽음 수 증가
-                plugin.warManager.recordDeath(victimGroup)
-            }
-        }
+        // 글로벌 전쟁 시스템에서는 킬/데스 추적하지 않음
+        // 영토 점령만 중요
     }
 
     /**

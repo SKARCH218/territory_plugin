@@ -47,14 +47,28 @@ class RegionNameInputListener(private val plugin: Territory_Plugin) : Listener {
 
         // 동기 태스크로 점령석 설치
         plugin.server.scheduler.runTask(plugin, Runnable {
-            val stone = plugin.territoryManager.placeStone(pending.location, pending.ownerGroup, regionName)
+            val stone = if (pending.isOutpost) {
+                // 전초기지 설치
+                plugin.territoryManager.placeOutpost(pending.location, pending.ownerGroup, regionName)
+            } else {
+                // 일반 점령석 설치
+                plugin.territoryManager.placeStone(pending.location, pending.ownerGroup, regionName)
+            }
 
             if (stone != null) {
                 val coloredNation = plugin.configManager.getColoredNationName(pending.ownerGroup)
-                player.sendMessage("§a점령석을 설치했습니다!")
-                player.sendMessage("§e국가: $coloredNation")
-                player.sendMessage("§e지역: §f$regionName")
-                player.sendMessage("§e티어: §f${stone.currentTier.tierName}")
+
+                if (pending.isOutpost) {
+                    player.sendMessage("§a전초기지를 설치했습니다!")
+                    player.sendMessage("§e국가: $coloredNation")
+                    player.sendMessage("§e지역: §f$regionName")
+                    player.sendMessage("§e유형: §c전초기지 (1청크, 업그레이드 불가)")
+                } else {
+                    player.sendMessage("§a점령석을 설치했습니다!")
+                    player.sendMessage("§e국가: $coloredNation")
+                    player.sendMessage("§e지역: §f$regionName")
+                    player.sendMessage("§e티어: §f${stone.currentTier.tierName}")
+                }
 
                 // 아이템 제거
                 val item = pending.item

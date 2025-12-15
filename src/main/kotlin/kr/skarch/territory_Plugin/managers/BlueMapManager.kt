@@ -47,17 +47,13 @@ class BlueMapManager(private val plugin: Territory_Plugin) {
     fun updateMarkers() {
         val api = blueMapAPI
         if (!isEnabled || api == null) {
-            plugin.logger.warning("BlueMap not enabled, skipping marker update")
-            return
+            return  // 로그 제거 (매번 뜨면 스팸)
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
             try {
-                plugin.logger.info("Starting BlueMap marker update...")
-
                 // Get all territories from database
                 val territories = plugin.databaseManager.getAllTerritories()
-                plugin.logger.info("Found ${territories.size} territories to display")
 
                 // Group chunks by world and owner
                 val groupedByWorld = mutableMapOf<String, MutableMap<String, MutableList<ChunkCoord>>>()
@@ -84,23 +80,16 @@ class BlueMapManager(private val plugin: Territory_Plugin) {
 
                     // Skip if not a war world
                     if (!plugin.configManager.isWarWorld(worldName)) {
-                        plugin.logger.info("Skipping non-war world: $worldName")
                         return@forEach
                     }
 
-                    plugin.logger.info("Processing BlueMap world: $worldId (mapped to: $worldName)")
-
                     blueWorld.maps.forEach { map ->
-                        val mapId = map.id
-                        plugin.logger.info("  Processing map: $mapId")
-
                         // Get or create marker set
                         val markerSet = map.markerSets[markerSetId] ?: MarkerSet.builder()
                             .label(markerSetLabel)
                             .build()
                             .also {
                                 map.markerSets[markerSetId] = it
-                                plugin.logger.info("    Created new marker set: $markerSetId")
                             }
 
                         // Clear existing markers
@@ -109,19 +98,12 @@ class BlueMapManager(private val plugin: Territory_Plugin) {
                         // Add markers for this world (use extracted world name)
                         val worldGroups = groupedByWorld[worldName]
                         if (worldGroups != null) {
-                            plugin.logger.info("    Found ${worldGroups.size} territories for $worldName")
                             worldGroups.forEach { (owner, chunks) ->
                                 createTerritoryMarker(markerSet, owner, chunks, map)
                             }
-                            plugin.logger.info("    Added ${worldGroups.size} territory markers")
-                        } else {
-                            plugin.logger.info("    No territories for this world (worldName: $worldName)")
-                            plugin.logger.info("    Available worlds: ${groupedByWorld.keys.joinToString()}")
                         }
                     }
                 }
-
-                plugin.logger.info("BlueMap markers updated successfully!")
             } catch (e: Exception) {
                 plugin.logger.severe("Failed to update BlueMap markers: ${e.message}")
                 e.printStackTrace()
@@ -211,13 +193,12 @@ class BlueMapManager(private val plugin: Territory_Plugin) {
                     val markerId = "region_${stoneUuid}"
                     markerSet.markers[markerId] = marker
 
-                    plugin.logger.info("      Created marker: $label (${stoneChunks.size} chunks)")
+                    // 로그 제거 (마커 생성마다 로그는 스팸)
                 }
             }
 
         } catch (e: Exception) {
-            plugin.logger.warning("      Failed to create marker for $owner: ${e.message}")
-            e.printStackTrace()
+            plugin.logger.warning("Failed to create marker for $owner: ${e.message}")
         }
     }
 

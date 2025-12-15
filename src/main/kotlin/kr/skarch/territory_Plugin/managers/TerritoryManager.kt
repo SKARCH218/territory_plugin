@@ -42,6 +42,39 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * Place a new OUTPOST (전초기지) stone at the specified location
+     * Creates a 2x2x2 cube at chunk center, claims only 1 chunk, cannot be upgraded
+     */
+    fun placeOutpost(location: Location, ownerGroup: String, regionName: String? = null): OccupationStone? {
+        val correctedLoc = correctToChunkCenter(location)
+
+        // Check if a stone already exists at this location
+        if (plugin.databaseManager.getStoneByLocation(correctedLoc) != null) {
+            return null
+        }
+
+        // Check if the location is clear (no important blocks)
+        if (!isLocationClearForStone(correctedLoc)) {
+            plugin.logger.warning("Cannot place outpost at ${correctedLoc}: location not clear")
+            return null
+        }
+
+        val stoneUuid = UUID.randomUUID()
+        val stone = OccupationStone(stoneUuid, ownerGroup, StoneTier.OUTPOST, correctedLoc, System.currentTimeMillis(), regionName)
+
+        // Place the physical blocks (2x2x2 cube at chunk center)
+        placeStoneStructure(correctedLoc)
+
+        plugin.databaseManager.saveStone(stone)
+
+        // 전초기지는 1청크만 점령 (radius = 0)
+        claimArea(correctedLoc, StoneTier.OUTPOST.radius, ownerGroup, stoneUuid)
+        plugin.blueMapManager.updateMarkers()
+
+        return stone
+    }
+
+    /**
      * Check if the location is clear for stone placement
      * Returns false if there are important blocks that shouldn't be destroyed
      */
@@ -233,6 +266,7 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
      * Destroy a stone and transfer all its chunks to the new owner
      */
     fun destroyStone(stone: OccupationStone, newOwnerGroup: String) {
+        val victimGroup = stone.ownerGroup
         val affectedChunks = plugin.databaseManager.removeChunksByStone(stone.stoneUuid)
         plugin.databaseManager.removeStone(stone.stoneUuid)
 
@@ -244,6 +278,10 @@ class TerritoryManager(private val plugin: Territory_Plugin) {
             val chunk = TerritoryChunk(chunkKey, newOwnerGroup, stone.stoneUuid)
             plugin.databaseManager.saveChunk(chunk)
         }
+
+        // 전쟁 통계 기록
+        plugin.warManager.recordStoneDestruction(newOwnerGroup, victimGroup)
+        plugin.warManager.recordTerritoryConquest(newOwnerGroup, victimGroup, affectedChunks.size)
 
         // Remove physical structure
         removeStoneStructure(stone.location)

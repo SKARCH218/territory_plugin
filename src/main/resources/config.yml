@@ -79,17 +79,18 @@ occupation-stone:
 
 # 전쟁 설정
 war:
-  # 전쟁 준비 시간 (초)
-  preparation-time: 600
+  # 전쟁 준비 시간 (초) - 전쟁 선포 후 실제 시작까지의 대기 시간
+  preparation-time: 600  # 10분
+
+  # 전쟁 지속 시간 (초) - 전쟁이 자동으로 종료되는 시간
+  # 이 시간이 지나면 남은 국가들이 항복비를 분할
+  duration: 3600  # 1시간
 
   # 카운트다운 알림 시점 (초)
   countdown-alerts: [300, 60, 30, 10]
 
   # 전쟁 최소 지속 시간 (초, 이 시간 전에는 전쟁 종료 불가)
-  minimum-duration: 1800
-
-  # 전쟁 자동 종료 시간 (초, 0이면 무제한)
-  auto-end-time: 0
+  minimum-duration: 1800  # 30분
 
   # 전쟁 선포 비용
   declaration-cost:
@@ -99,38 +100,29 @@ war:
   # 전쟁 선포 쿨타임 (초, 이전 전쟁 종료 후)
   declaration-cooldown: 7200  # 2시간
 
-  # 전쟁 선포국 버프 (전쟁 시작 시 적용)
-  attacker-buffs:
-    enabled: true
-    duration: 1800  # 30분 (초)
-    effects:
-      - "SPEED:1"           # 신속 1
-      - "STRENGTH:1"        # 힘 1
-      - "RESISTANCE:1"      # 저항 1
-      - "REGENERATION:1"    # 재생 1
-    broadcast-message: true
+  # 항복 시스템 설정
+  surrender:
+    # 항복 기본 비용
+    base-cost: 100000  # 10만원
+
+    # 잃은 영토 1개당 항복비 감소 비율 (0.05 = 5%)
+    lost-territory-discount: 0.05
+
+    # 획득한 영토 1개당 항복비 증가 비율 (0.1 = 10%)
+    gained-territory-penalty: 0.1
 
   # 전쟁 선포 시 실행될 콘솔 명령어 목록
-  # {team} 플레이스홀더를 사용하여 전쟁을 선포한 국가명으로 치환됩니다
   declaration-commands:
-    - "say {team}이(가) 전면전을 선포했습니다!"
-    - "title @a title {\"text\":\"전쟁 경고!\",\"color\":\"red\"}"
-    - "title @a subtitle {\"text\":\"{team}의 전면전 선포\",\"color\":\"yellow\"}"
+    - "say 글로벌 전면전이 선포되었습니다!"
+    - "title @a title {\"text\":\"⚠ 전쟁 경고! ⚠\",\"color\":\"red\"}"
+    - "title @a subtitle {\"text\":\"글로벌 전면전 선포\",\"color\":\"yellow\"}"
 
   # 전쟁 보상 시스템
   rewards:
     enabled: true
-
-    # 승리 보상 (전쟁 종료 시 최고 점수 국가)
-    victory:
-      money: 100000
-      items:
-        - "diamond:64"
-        - "netherite_ingot:16"
-        - "enchanted_golden_apple:5"
-      broadcast: true
-      commands:
-        - "title @a[team={winner}] title {\"text\":\"승리!\",\"color\":\"gold\"}"
+    # 항복비는 WarManager에서 자동으로 분배됨
+    commands:
+      - "title @a[team={winner}] title {\"text\":\"승리!\",\"color\":\"gold\"}"
 
     # 참여 보상 (킬 수에 따라)
     participation:
