@@ -5,7 +5,9 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.scheduler.BukkitRunnable
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 class WarManager(private val plugin: Territory_Plugin) {
 
@@ -21,8 +23,8 @@ class WarManager(private val plugin: Territory_Plugin) {
     // 각 국가의 전쟁 통계
     private val warStats = ConcurrentHashMap<String, NationWarStats>()
 
-    // 항복한 국가 목록
-    private val surrenderedNations = mutableSetOf<String>()
+    // 항복한 국가 목록 (동기화됨)
+    private val surrenderedNations = Collections.synchronizedSet(mutableSetOf<String>())
 
     data class NationWarStats(
         var territoriesLost: Int = 0,      // 잃은 영토 수
@@ -287,8 +289,11 @@ class WarManager(private val plugin: Territory_Plugin) {
             val remainingScores = remainingTeams.associateWith { scores[it] ?: 0.0 }
             val maxScore = remainingScores.values.maxOrNull() ?: 0.0
 
-            // 최고 점수 팀들 찾기
-            val winners = remainingScores.filter { it.value == maxScore }.keys.toList()
+            // 최고 점수 팀들 찾기 (부동소수점 오차 고려)
+            val epsilon = 0.001
+            val winners = remainingScores.filter {
+                abs(it.value - maxScore) < epsilon
+            }.keys.toList()
 
             if (winners.size == 1) {
                 // 1등이 1개 팀 = 독식
@@ -422,6 +427,20 @@ class WarManager(private val plugin: Territory_Plugin) {
      * 글로벌 전쟁 상태 확인
      */
     fun isGlobalWarActive(): Boolean = globalWarActive
+
+    /**
+     * 전쟁 종료까지 남은 시간 (초)
+     * @return 남은 시간 (초), 전쟁 중이 아니면 null
+     */
+    fun getWarTimeRemaining(): Int? {
+        if (!globalWarActive) return null
+
+        val warDuration = plugin.configManager.getWarDuration()
+        val elapsed = (System.currentTimeMillis() - warStartTime) / 1000
+        val remaining = warDuration - elapsed.toInt()
+
+        return maxOf(0, remaining)
+    }
 
     /**
      * 전쟁 중인지 확인 (하위 호환성)

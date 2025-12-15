@@ -42,6 +42,23 @@ class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : Plac
                 if (plugin.warManager.isGlobalWarActive()) "예" else "아니오"
             }
 
+            // 전쟁 종료까지 남은 시간 (초)
+            "war_time_remaining" -> {
+                plugin.warManager.getWarTimeRemaining()?.toString() ?: "0"
+            }
+
+            // 전쟁 종료까지 남은 시간 (MM:SS 포맷)
+            "war_time_remaining_formatted" -> {
+                val remaining = plugin.warManager.getWarTimeRemaining() ?: 0
+                formatTime(remaining)
+            }
+
+            // 전쟁 종료까지 남은 시간 (HH:MM:SS 포맷)
+            "war_time_remaining_full" -> {
+                val remaining = plugin.warManager.getWarTimeRemaining() ?: 0
+                formatTimeFull(remaining)
+            }
+
             // 현재 위치 청크 소유자
             "chunk_owner" -> {
                 val chunkKey = "${player.world.name};${player.chunk.x};${player.chunk.z}"
@@ -100,6 +117,13 @@ class TerritoryPlaceholderExpansion(private val plugin: Territory_Plugin) : Plac
         val minutes = seconds / 60
         val secs = seconds % 60
         return String.format("%02d:%02d", minutes, secs)
+    }
+
+    private fun formatTimeFull(seconds: Int): String {
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+        return String.format("%02d:%02d:%02d", hours, minutes, secs)
     }
 }
 

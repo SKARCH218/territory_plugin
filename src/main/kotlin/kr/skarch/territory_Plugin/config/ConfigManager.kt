@@ -133,6 +133,14 @@ class ConfigManager(private val plugin: Territory_Plugin) {
     }
 
     /**
+     * 전쟁 타이머 보스바 활성화 여부 - NEW!
+     * 기본값: true
+     */
+    fun isWarTimerBossBarEnabled(): Boolean {
+        return config.getBoolean("war.timer-bossbar.enabled", true)
+    }
+
+    /**
      * 전쟁 선포국 버프 활성화 여부
      */
     fun isAttackerBuffsEnabled(): Boolean {

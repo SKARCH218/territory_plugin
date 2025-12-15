@@ -335,6 +335,10 @@ class TerritoryCommand(private val plugin: Territory_Plugin) : CommandExecutor {
         PlayerGroupCache.invalidateAll()
         sender.sendMessage("§a플레이어 그룹 캐시를 초기화했습니다. 팀 변경 사항이 즉시 반영됩니다!")
 
+        // 전쟁 타이머 보스바 reload
+        plugin.warTimerBossBar.reload()
+        sender.sendMessage("§a전쟁 타이머 보스바를 리로드했습니다!")
+
         sender.sendMessage(plugin.langManager.getMessage("reload_success"))
         sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "config.yml"))
         sender.sendMessage(plugin.langManager.getMessage("reload_files", "file" to "team.yml"))

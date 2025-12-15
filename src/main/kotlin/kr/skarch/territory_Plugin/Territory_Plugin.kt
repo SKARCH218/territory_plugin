@@ -34,6 +34,7 @@ class Territory_Plugin : JavaPlugin() {
     lateinit var statsManager: StatsManager
     lateinit var stoneAbilityManager: StoneAbilityManager
     lateinit var lordManager: LordManager
+    lateinit var warTimerBossBar: kr.skarch.territory_Plugin.managers.WarTimerBossBar
     lateinit var territoryAPI: kr.skarch.territory_Plugin.api.TerritoryAPI
     private var luckPermsListener: LuckPermsListener? = null
 
@@ -66,6 +67,7 @@ class Territory_Plugin : JavaPlugin() {
         statsManager = StatsManager(this)
         stoneAbilityManager = StoneAbilityManager(this)
         lordManager = LordManager(this)
+        warTimerBossBar = kr.skarch.territory_Plugin.managers.WarTimerBossBar(this)
         territoryAPI = kr.skarch.territory_Plugin.api.TerritoryAPI(this)
 
         // Initialize PlayerGroupCache with config values
@@ -74,6 +76,9 @@ class Territory_Plugin : JavaPlugin() {
         // Initialize StoneAbilityManager
         stoneAbilityManager.initialize()
 
+        // Initialize WarTimerBossBar
+        warTimerBossBar.initialize()
+
         // Register listeners
         val warDeclarationListener = WarDeclarationListener(this)
         server.pluginManager.registerEvents(StoneUpgradeListener(this), this)
@@ -81,6 +86,7 @@ class Territory_Plugin : JavaPlugin() {
         server.pluginManager.registerEvents(warDeclarationListener, this)
         server.pluginManager.registerEvents(kr.skarch.territory_Plugin.listeners.RegionNameInputListener(this), this)
         server.pluginManager.registerEvents(CombatListener(this), this)
+        server.pluginManager.registerEvents(kr.skarch.territory_Plugin.listeners.PlayerConnectionListener(this), this)
 
         // Register commands
         getCommand("territory")?.setExecutor(TerritoryCommand(this))
@@ -98,7 +104,7 @@ class Territory_Plugin : JavaPlugin() {
             luckPermsListener = LuckPermsListener(this, luckPerms)
             luckPermsListener?.register()
         } catch (e: Exception) {
-            logger.warning("LuckPerms를 찾을 수 없습니다. 그룹 캐시 자동 무효화가 비활성화됩니다.")
+            logger.warning("LuckPerms를 찾을 수 없습니다. 그룹 캐시 자동 무효화가 비활성화됩니다. (${e.message})")
         }
 
         logger.info("Territory Plugin 활성화 완료!")
@@ -111,6 +117,11 @@ class Territory_Plugin : JavaPlugin() {
         // Shutdown ability manager
         if (::stoneAbilityManager.isInitialized) {
             stoneAbilityManager.shutdown()
+        }
+
+        // Shutdown war timer boss bar
+        if (::warTimerBossBar.isInitialized) {
+            warTimerBossBar.shutdown()
         }
 
         databaseManager.close()

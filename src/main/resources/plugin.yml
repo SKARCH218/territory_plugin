@@ -1,5 +1,5 @@
 name: territory_Plugin
-version: '1.4'
+version: '1.4.1'
 main: kr.skarch.territory_Plugin.Territory_Plugin
 api-version: '1.20'
 depend: [LuckPerms]
